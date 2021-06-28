@@ -325,6 +325,21 @@ namespace Algoim
     }
 
     template<int N>
+    Interval<N> log(const Interval<N>& i)
+    {
+        using std::abs;
+        Real lg = std::log(i.alpha);
+        Real b = i.maxDeviation();
+        if (i.alpha < 0.0)
+            throw std::domain_error("Unable to compute log() with supplied argument, alpha is -ve");
+        if (b == abs(i.alpha))
+            throw std::domain_error("Unable to compute log() with supplied argument");
+        Real log_bar = 1.0/(i.alpha);
+        Real C = -1.0/(abs(i.alpha) - b)*(abs(i.alpha) - b);
+        return Interval<N>(lg, log_bar * i.beta , (abs(log_bar)*i.eps) + (0.5 * C * sqr(b)));
+    }
+
+    template<int N>
     Interval<N> cosh(const Interval<N>& z)
     {
         Real coshz = cosh(z.alpha);

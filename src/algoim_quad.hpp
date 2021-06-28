@@ -14,7 +14,7 @@
 #include "algoim_interval.hpp"
 #include "algoim_boundingbox.hpp"
 #include "algoim_multiloop.hpp"
-
+using namespace std;
 namespace Algoim
 {
     namespace detail
@@ -643,7 +643,7 @@ namespace Algoim
             hyperrectangle, i.e., {phi < 0}, intersected with xrange, intersected with the face
             {x(dim) == xrange(side)(dim)}.
        - side is used only when 0 <= dim && dim < N and specifies which side of the hyperrectangle to restrict
-         to, either side == 0 or side == 1 for the “left” or “right” face, respectively (with normal pointing
+         to, either side == 0 or side == 1 for the ï¿½leftï¿½ or ï¿½rightï¿½ face, respectively (with normal pointing
          in the direction of the dim-th axis).
        - qo specifies the degree of the underlying one-dimensional Gaussian quadrature scheme and must satisfy
          1 <= qo && qo <= 10.
