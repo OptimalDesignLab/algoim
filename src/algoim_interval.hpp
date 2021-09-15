@@ -6,7 +6,6 @@
 #include "algoim_real.hpp"
 #include "algoim_blitzinc.hpp"
 #include "algoim_utility.hpp"
-
 namespace Algoim
 {
     /* Interval arithmetic using a first-order Taylor series with remainder. A function's range of attainable values is
@@ -309,19 +308,19 @@ namespace Algoim
         Real b = i.maxDeviation();
         if (b > i.alpha)
             throw std::domain_error("Unable to compute sqrt() with supplied argument");
-        Real sqrtx = sqrt(i.alpha);
+        Real sqrtx = std::sqrt(i.alpha);
         Real sqrtxinv = 1.0 / sqrtx;
-        Real C = 0.25/((i.alpha - b)*sqrt(i.alpha - b));
+        Real C = 0.25/((i.alpha - b)*std::sqrt(i.alpha - b));
         return Interval<N>(sqrtx, (0.5*sqrtxinv)*i.beta, 0.5 * C * sqr(b));
     }
 
     template<int N>
     Interval<N> exp(const Interval<N>& i)
     {
-        Real ex = exp(i.alpha);
+        Real ex = std::exp(i.alpha);
         Real b = i.maxDeviation();
         // Bounding (exp(alpha))'' using montonocity and thus argument [i.alpha + b]
-        return Interval<N>(ex, ex * i.beta, ex*i.eps + 0.5 * exp(i.alpha + b) * sqr(b));
+        return Interval<N>(ex, ex * i.beta, ex*i.eps + 0.5 * std::exp(i.alpha + b) * sqr(b));
     }
 
     template<int N>

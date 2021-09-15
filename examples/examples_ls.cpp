@@ -1,6 +1,7 @@
 #include <fstream>
 #include "/users/kaurs3/Sharan/Research/Spring_2020/algoim_fork/src/algoim_levelset.hpp"
 #include <iostream>
+// #include "algoim_quad.hpp"
 
 /// this function constructs the normal vectors for given boundary points of level-set geometry
 template <int N>
@@ -41,7 +42,8 @@ int main(int argc, char *argv[])
 {
     /// dimension
     const int N = 2;
-    const char *geometry_file = "geometry_data/circle_1.dat";
+    //const char *geometry_file = "geometry_data/circle_1.dat";
+    const char *geometry_file = "geometry_data/ellipse.dat";
     ifstream file;
     file.open(geometry_file);
     /// Vector of normal vectors
@@ -51,18 +53,19 @@ int main(int argc, char *argv[])
     /// read the boundary coordinates from user-provided file
     while (1)
     {
+        if (file.eof())
+            break;
         TinyVector<double, N> x;
         for (int j = 0; j < N; ++j)
         {
             file >> x(j);
         }
         Xc.push_back(x);
-        if (file.eof())
-            break;
     }
     file.close();
     /// get the number of boundary points
     int nbnd = Xc.size();
+    cout << "nbnd " << nbnd << endl;
     /// construct the normal vector for all boundary points
     nor = constructNormal<N>(Xc);
     /// parameters
@@ -75,5 +78,63 @@ int main(int argc, char *argv[])
     x(1) = 0;
     cout << "phi " << phi(x) << endl;
     cout << "grad phi " << phi.grad(x) << endl;
+    std::cout << std::setprecision(10) << std::endl;
+    
+    //"Area of a 2D circle using automatic subdivision
+    // {
+    //     std::cout << "Area of a 2D circle using automatic subdivision:\n";
+    //     blitz::TinyVector<double, N> xupper;
+    //     blitz::TinyVector<double, N> xlower;
+    //     xlower = {0.9, 0.9};
+    //     xupper = {3.1, 3.1};
+    //     auto q = Algoim::quadGen<2>(phi, Algoim::BoundingBox<double,2>(xlower, xupper), -1, -1, 2);
+    //     double area = q([](const TinyVector<double,2> x) { return 1.0; });
+    //     std::cout << "  computed area = " << area << "\n";
+    //     std::cout << "    (exact area = "  <<  M_PI << "\n";
+    // }
+
+    // /// Area of a 2D ellipse, computed via the cells of a Cartesian grid
+    // {
+    //     int n = 64;
+    //     std::cout << "Area of a 2D circle, computed via the cells of a " << n << " by " << n << " Cartesian grid:\n";
+    //     double dx = 2.2 / n;
+    //     double dy = 2.2 / n;
+    //     double min_x = 0.9;
+    //     double min_y = 0.9;
+    //     double area = 0.0;
+    //     for (int i = 0; i < n; ++i)
+    //         for (int j = 0; j < n; ++j)
+    //         {
+    //             blitz::TinyVector<double, 2> xmin = {min_x + i * dx, min_y + j * dy};
+    //             blitz::TinyVector<double, 2> xmax = {min_x + i * dx + dx, min_y + j * dy + dy};
+    //             cout << "xmin " << xmin  << "     " << "xmax " << xmax << endl;
+    //             auto q = Algoim::quadGen<2>(phi, Algoim::BoundingBox<double, 2>(xmin, xmax), -1, -1, 4);
+    //             area += q([](TinyVector<double, 2> x) { return 1.0; });
+    //         }
+    //     std::cout << "  computed area = " << area << "\n";
+    //     std::cout << "    exact area = " << M_PI << "\n";
+    // }
+     /// Area of a 2D ellipse, computed via the cells of a Cartesian grid
+    {
+        int n = 64;
+        std::cout << "Area of a 2D ellipse, computed via the cells of a " << n << " by " << n << " Cartesian grid:\n";
+        double dx = 8.2 / n;
+        double dy = 2.2 / n;
+        double min_x = -4.1;
+        double min_y = -1.1;
+        double area = 0.0;
+        for (int i = 0; i < n; ++i)
+            for (int j = 0; j < n; ++j)
+            {
+                blitz::TinyVector<double, 2> xmin = {min_x + i * dx, min_y + j * dy};
+                blitz::TinyVector<double, 2> xmax = {min_x + i * dx + dx, min_y + j * dy + dy};
+                //cout << "xmin " << xmin  << "     " << "xmax " << xmax << endl;
+                auto q = Algoim::quadGen<2>(phi, Algoim::BoundingBox<double, 2>(xmin, xmax), -1, -1, 4);
+                area += q([](TinyVector<double, 2> x) { return 1.0; });
+            }
+        std::cout << "  computed area = " << area << "\n";
+        std::cout << "    exact area = " << 4.0 * M_PI << "\n";
+    }
+
     return 0;
 } // main
