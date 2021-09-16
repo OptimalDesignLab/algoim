@@ -348,7 +348,16 @@ namespace Algoim
                             dmax = max(dmax, perp);
                         }
                         double min_psi = min(bar_psi * (1 - psi_bar), 0.25);
-                        phix_bnd += max(dmax - djmin, -dmin + djmax) * 2 * rho * min_psi;
+                        double temp;
+                        if ((bar_psi > 0.5) && (psi_bar < 0.5))
+                        {
+                            temp = 2.0 * rho * 0.25;
+                        }
+                        else
+                        {
+                            temp = 2.0 * rho * max(psi_bar * (1.0 - psi_bar), bar_psi * (1.0 - bar_psi));
+                        }
+                        phix_bnd += max(dmax - djmin, -dmin + djmax) * temp;
                         phiy_bnd += max(dmax - djmin, -dmin + djmax) * 2 * rho * min_psi;
                     }
                 }
@@ -362,7 +371,7 @@ namespace Algoim
                     eps -= std::abs(beta(dim)) * x(0).delta(dim);
                 }
             }
-           // cout << "phi_bnd " << phi_bnds << endl;
+            // cout << "phi_bnd " << phi_bnds << endl;
             cout << "phix_bnd " << phix_bnds << endl;
             double phi_xc = 0.0;
             Interval<N> phi = Interval<N>(phi_xc, 0.0, 0.0);
