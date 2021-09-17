@@ -76,7 +76,6 @@ namespace Algoim
                 double deli_x = sqrt(magsqr(x_diff) + delta);
                 min_dist = min(min_dist, deli_x);
             }
-            min_dist = 0;
             double numer = 0.0;
             double denom = 0.0;
             for (int i = 0; i < nbnd; ++i)
@@ -97,6 +96,7 @@ namespace Algoim
             double numer_bar = ls_bar / denom;
             double denom_bar = -(ls_bar * ls) / denom;
             TinyVector<double, N> phi_bar;
+            phi_bar = 0.0;
             for (int i = 0; i < nbnd; ++i)
             {
                 TinyVector<double, N> x_diff;
@@ -116,6 +116,7 @@ namespace Algoim
                 // dist = sqrt(dot(x - xc, x - xc) + levset.delta)
                 phi_bar += (dist_bar / dist) * x_diff;
             }
+            //cout << "phi_bar " << phi_bar << endl;
             return phi_bar;
         }
 #if 0
@@ -216,17 +217,17 @@ namespace Algoim
             using std::exp;
             using std::sqrt;
             int nbnd = xbnd.size();
-            /// find minimum distance
-            double min_dist = 1e+100;
-            const int nel = 5;
+            const int nel = 80;
             TinyVector<double, nel> phi_bnds;
             TinyVector<double, nel> phix_bnds;
             TinyVector<double, nel> phiy_bnds;
+            TinyVector<double, N> dxp;
             double ymin = -2.0;
             double ymax = 2.0;
             double xslice = 3.0;
-            cout << " ----------------------- " << endl;
-            cout << "nel " << nel << endl;
+            double ds = (ymax - ymin) / nel;
+            dxp = {0.5 * ds, 0.5 * ds};
+            double L = mag(dxp);
             for (int k = 0; k < nel; ++k)
             {
                 TinyVector<double, N> xc;
@@ -235,8 +236,39 @@ namespace Algoim
                 yelem(0) = (ymax - ymin) * (k) / nel + ymin;
                 yelem(1) = (ymax - ymin) * (k + 1) / nel + ymin;
                 xc(1) = 0.5 * (yelem(0) + yelem(1));
-                // cout << "xc " << xc << endl;
+                double ymid = xc(1);
+                const int nv = pow(2, N);
+                /// create the element vertices
+                std::vector<TinyVector<double, N>> vert;
+                TinyVector<double, N> xmid = {xslice, ymid};
+                for (int idx = 0; idx < nv; ++idx)
+                {
+                    vert.push_back(xmid);
+                }
+                for (int idx = 0; idx < nv; ++idx)
+                {
+                    for (int d = 0; d < N; ++d)
+                    {
+                        if ((d == 0) && ((idx == 1) || (idx == nv - 1)))
+                        {
+
+                            vert.at(idx)(d) += dxp[d];
+                        }
+                        else if (((d == 1) && ((idx == 2) || (idx == (nv - 1)))))
+                        {
+                            vert.at(idx)(d) += dxp[d];
+                        }
+                        else
+                        {
+
+                            vert.at(idx)(d) -= dxp[d];
+                        }
+                    }
+                }
                 int j_max = 0;
+
+                /// find minimum distance
+                double min_dist = 1e+100;
                 for (int i = 0; i < nbnd; ++i)
                 {
                     TinyVector<double, N> x_diff;
@@ -249,6 +281,7 @@ namespace Algoim
                         j_max = i;
                     }
                 }
+
                 //cout << "min_dist " << min_dist << endl;
                 double denom = 0.0;
                 double phi_xc = 0.0;
@@ -263,27 +296,17 @@ namespace Algoim
                     denom += expc;
                     phi_xc += dist * expc;
                 }
-                // if (k == nel-1)
-                // {
-                //     cout << "denom " << denom << endl;
-                // }
                 phi_xc = phi_xc / denom;
-                const int nv = 2;
-                TinyVector<TinyVector<double, N>, nv> vert;
-                vert(0) = {xslice, yelem(0)};
-                vert(1) = {xslice, yelem(1)};
-                TinyVector<double, N> dx = x(0).delta();
-                double L = 0.5 * (ymax - ymin) / nel;
                 double fac = exp(2.0 * rho * L);
                 double phi_bnd = 0.0;
                 for (int i = 0; i < nbnd; ++i)
                 {
                     double dmin = 1e100;
                     double dmax = -1e100;
-                    for (int k = 0; k < nv; ++k)
+                    for (int kv = 0; kv < nv; ++kv)
                     {
                         TinyVector<double, N> ds;
-                        ds = vert(k) - xbnd.at(i);
+                        ds = vert.at(kv) - xbnd.at(i);
                         double perp = dot(ds, norm.at(i));
                         dmin = min(dmin, perp);
                         dmax = max(dmax, perp);
@@ -294,29 +317,24 @@ namespace Algoim
                     double delx = sqrt(magsqr(x_diff) + delta);
                     double expc = exp(-rho * (delx - min_dist));
                     double psi_xc = expc / denom;
+                    // double min_psi = min(psi_xc , 1.0/fac) * fac;
                     double min_psi = min(psi_xc * fac, 1.0);
                     double max_phi = max(dmax - phi_xc, -dmin + phi_xc);
-                    if (k == nel - 1)
-                    {
-                        // cout << "fac " << exp(2.0 * rho * L) << endl;
-                        // cout << "min_psi " << psi_xc << endl;
-                        // cout << "prod " << exp(2.0 * rho * L) *  psi_xc << endl;
-                    }
                     phi_bnd += max_phi * min_psi;
                 }
+
                 /// verify the derivative bounds
                 double djmin = 1e100;
                 double djmax = -1e100;
-                for (int k = 0; k < nv; ++k)
+                for (int kv = 0; kv < nv; ++kv)
                 {
                     TinyVector<double, N> ds;
-                    ds = vert(k) - xbnd.at(j_max);
+                    ds = vert.at(kv) - xbnd.at(j_max);
                     double perp = dot(ds, norm.at(j_max));
                     djmin = min(djmin, perp);
                     djmax = max(djmax, perp);
                 }
-                LevelSet<N> ls(xbnd, norm, rho, delta);
-                TinyVector<double, N> beta = ls.grad(xc);
+                TinyVector<double, N> beta = grad(xc);
                 double delx_phi = beta(0);
                 double dely_phi = beta(1);
                 /// find `j` index at which psi(xc) is largest
@@ -342,7 +360,7 @@ namespace Algoim
                         for (int k = 0; k < nv; ++k)
                         {
                             TinyVector<double, N> ds;
-                            ds = vert(k) - xbnd.at(j);
+                            ds = vert.at(k) - xbnd.at(j);
                             double perp = dot(ds, norm.at(j));
                             dmin = min(dmin, perp);
                             dmax = max(dmax, perp);
@@ -361,18 +379,18 @@ namespace Algoim
                         phiy_bnd += max(dmax - djmin, -dmin + djmax) * 2 * rho * min_psi;
                     }
                 }
-                //cout << "phi_bnd " << phi_bnd << endl;
                 phi_bnds(k) = phi_bnd;
                 phix_bnds(k) = phix_bnd;
                 phiy_bnds(k) = phiy_bnd;
-                double eps = phi_bnd;
-                for (int dim = 0; dim < N; ++dim)
-                {
-                    eps -= std::abs(beta(dim)) * x(0).delta(dim);
-                }
             }
-            // cout << "phi_bnd " << phi_bnds << endl;
-            cout << "phix_bnd " << phix_bnds << endl;
+            cout << " =============================  " << endl;
+            cout << "level set bounds " << endl;
+            cout << " =============================  " << endl;
+            cout << phi_bnds << endl;
+            cout << " =============================  " << endl;
+            cout << "level set gradient bounds (x dir) " << endl;
+            cout << " =============================  " << endl;
+            cout << phix_bnds << endl;
             double phi_xc = 0.0;
             Interval<N> phi = Interval<N>(phi_xc, 0.0, 0.0);
             return phi;
