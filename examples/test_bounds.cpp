@@ -70,13 +70,8 @@ void testLevelSetBounds(vector<TinyVector<double, N>> Xc, vector<TinyVector<doub
         yelem(0) = (ymax - ymin) * (k) / nel + ymin;
         yelem(1) = (ymax - ymin) * (k + 1) / nel + ymin;
         xc(1) = 0.5 * (yelem(0) + yelem(1));
-        double ymid = xc(1);
-        const int nv = pow(2, N);
-        /// create the element vertices
-        std::vector<TinyVector<double, N>> vert;
-        TinyVector<double, N> xmid = {xslice, ymid};
-        Interval<N> x_c = Interval<N>(xmid(0));
-        Interval<N> y_c = Interval<N>(xmid(1));
+        Interval<N> x_c = Interval<N>(xc(0));
+        Interval<N> y_c = Interval<N>(xc(1));
         x_c.delta() = del;
         y_c.delta() = del;
         phic(0) = x_c;
@@ -115,13 +110,8 @@ void testLevelSetGradBounds(vector<TinyVector<double, N>> Xc, vector<TinyVector<
         yelem(0) = (ymax - ymin) * (k) / nel + ymin;
         yelem(1) = (ymax - ymin) * (k + 1) / nel + ymin;
         xc(1) = 0.5 * (yelem(0) + yelem(1));
-        double ymid = xc(1);
-        const int nv = pow(2, N);
-        /// create the element vertices
-        std::vector<TinyVector<double, N>> vert;
-        TinyVector<double, N> xmid = {xslice, ymid};
-        Interval<N> x_c = Interval<N>(xmid(0));
-        Interval<N> y_c = Interval<N>(xmid(1));
+        Interval<N> x_c = Interval<N>(xc(0));
+        Interval<N> y_c = Interval<N>(xc(1));
         x_c.delta() = del;
         y_c.delta() = del;
         phic(0) = x_c;
