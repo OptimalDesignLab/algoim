@@ -153,8 +153,6 @@ int main(int argc, char *argv[])
     /// parameters
     double rho = 10.0 * nbnd;
     double delta = 1e-10;
-    /// evaluate levelset and it's gradient
-    Algoim::LevelSet<N> phi(Xc, nor, rho, delta);
     /// get the bounds
     const int nel = 20;
     double ymin = -2.0;
