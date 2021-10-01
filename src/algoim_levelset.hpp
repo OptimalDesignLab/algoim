@@ -295,13 +295,13 @@ namespace Algoim
                 double max_phi = max(dmax - phi_xc, -dmin + phi_xc);
                 phi_bnd += max_phi * min_psi;
             }
+          //  cout << phi_bnd << endl;
             LevelSet<N> ls(xbnd, norm, rho, delta);
             TinyVector<double, N> beta = ls.grad(xc);
             double eps = phi_bnd;
-            cout << phi_bnd << endl;
             for (int dim = 0; dim < N; ++dim)
             {
-                eps -= std::abs(beta(dim)) * x(0).delta(dim);
+                eps -= std::abs(beta(dim)) * x(dim).delta(dim);
             }
             Interval<N> phi = Interval<N>(phi_xc, beta, eps);
             return phi;
@@ -320,6 +320,7 @@ namespace Algoim
             int nbnd = xbnd.size();
             /// find minimum distance
             double min_dist = 1e+100;
+            /// find `j` index at which psi(xc) is largest
             int j_max = 0;
             for (int i = 0; i < nbnd; ++i)
             {
@@ -374,7 +375,7 @@ namespace Algoim
             TinyVector<double, N> beta = ls.grad(xc);
             double delx_phi = beta(0);
             double dely_phi = beta(1);
-            /// find `j` index at which psi(xc) is largest
+
             double phix_bnd = 0.0;
             double phiy_bnd = 0.0;
             for (int j = 0; j < nbnd; ++j)
@@ -416,10 +417,10 @@ namespace Algoim
                     phiy_bnd += max(dmax - djmin, -dmin + djmax) * temp;
                 }
             }
-            cout << phix_bnd << " , " << phiy_bnd << endl;
+           // cout << phix_bnd << " , " << phiy_bnd << endl;
             double eps_x = phix_bnd;
             double eps_y = phiy_bnd;
-            TinyVector<double, N + 1> hes;
+            TinyVector<double, N *(N + 1) / 2> hes;
             hes = hessian(xc);
             TinyVector<double, N> beta_x, beta_y;
             beta_x(0) = hes(0);
@@ -428,8 +429,8 @@ namespace Algoim
             beta_y(1) = hes(2);
             for (int dim = 0; dim < N; ++dim)
             {
-                eps_x -= std::abs(beta_x(dim)) * x(0).delta(dim);
-                eps_y -= std::abs(beta_y(dim)) * x(0).delta(dim);
+                eps_x -= std::abs(beta_x(dim)) * x(dim).delta(dim);
+                eps_y -= std::abs(beta_y(dim)) * x(dim).delta(dim);
             }
             Interval<N> phi_x = Interval<N>(delx_phi, beta_x, eps_x);
             Interval<N> phi_y = Interval<N>(dely_phi, beta_y, eps_y);

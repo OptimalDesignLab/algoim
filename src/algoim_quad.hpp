@@ -397,7 +397,7 @@ namespace Algoim
                 evalIntegrand(Real(0.0), Real(1.0));
                 return;
             }
-
+            // std::cout << "inside ImplicitIntegral() " << std::endl;
             // Establish interval bounds for prune() and remaining part of ctor.
             for (int dim = 0; dim < N; ++dim)
             {
@@ -670,6 +670,7 @@ namespace Algoim
         {
             // Surface integral
             psi[0] = PsiCode<N>(0, -1);
+            //std::cout << "inside quadGen() " << std::endl;
             ImplicitIntegral<N,N,F,QuadratureRule<N>,true>(phi, q, free, psi, 1, xrange, qo);
         }
         else

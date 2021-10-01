@@ -19,11 +19,11 @@ std::vector<TinyVector<double, N>> constructNormal(std::vector<TinyVector<double
         {
             if (i == 0)
             {
-                dX.push_back(Xc.at(i + 1)(j) - Xc.at(i)(j));
+                dX.push_back(0.5 * (Xc.at(i + 1)(j) - Xc.at(nbnd - 1)(j)));
             }
             else if (i == nbnd - 1)
             {
-                dX.push_back(Xc.at(i)(j) - Xc.at(i - 1)(j));
+                dX.push_back(0.5 * (Xc.at(0)(j) - Xc.at(i - 1)(j)));
             }
             else
             {
@@ -151,13 +151,14 @@ int main(int argc, char *argv[])
     /// construct the normal vector for all boundary points
     nor = constructNormal<N>(Xc);
     /// parameters
-    double rho = 10.0 * nbnd;
+    double rho = 10.0*nbnd;
     double delta = 1e-10;
     /// get the bounds
-    const int nel = 20;
+    const int nel = 10;
     double ymin = -2.0;
     double ymax = 2.0;
     double xslice = 3.0;
+    cout << setprecision(12) << endl;
     testLevelSetBounds<N>(Xc, nor, xslice, ymax, ymin, nel, rho, delta);
     testLevelSetGradBounds<N>(Xc, nor, xslice, ymax, ymin, nel, rho, delta);
     return 0;
