@@ -124,13 +124,13 @@ namespace Algoim
         /// calculate the second derivative of level-set function
         /// \param[in] x - tinyvector of point where gradphi(x) needs to be calculated
         /// \param[out] phi_xx - level-set function's second derivative
-        TinyVector<double, N *(N + 1) / 2> hessian(const blitz::TinyVector<double, N> &x) const
+        TinyVector<double, 2 * N> hessian(const blitz::TinyVector<double, N> &x) const
         {
             using std::exp;
             using std::sqrt;
             int nbnd = xbnd.size();
             TinyVector<double, N> phi_xx;
-            TinyVector<double, N + 1> phix_bar;
+            TinyVector<double, 2 * N> phix_bar;
             /// find minimum distance
             double min_dist = 1e+100;
             for (int i = 0; i < nbnd; ++i)
@@ -158,6 +158,8 @@ namespace Algoim
             TinyVector<double, N> denom_xx = 0.0;
             double numer_xy = 0.0;
             double denom_xy = 0.0;
+            double numer_yx = 0.0;
+            double denom_yx = 0.0;
             double term1;
             double term2;
             for (int i = 0; i < nbnd; ++i)
@@ -192,11 +194,19 @@ namespace Algoim
                 term1 = delx * expc_y * x_diff(0);
                 term2 = expc * x_diff(0) * x_diff(1) / delx;
                 double expc_xy = -rho * (term1 - term2) / (delx * delx);
+                term1 = delx * expc_x * x_diff(1);
+                term2 = expc * x_diff(0) * x_diff(1) / delx;
+                double expc_yx = -rho * (term1 - term2) / (delx * delx);
                 double perp_xy = 0.0;
+                double perp_yx = 0.0;
                 term1 = (perp * expc_xy) + (expc_x * perp_y);
                 term2 = (expc_y * perp_x) + (perp_xy * expc);
                 numer_xy += term1 + term2;
                 denom_xy += expc_xy;
+                term1 = (perp * expc_yx) + (expc_y * perp_x);
+                term2 = (expc_x * perp_y) + (perp_yx * expc);
+                numer_yx += term1 + term2;
+                denom_yx += expc_yx;
             }
             for (int d = 0; d < N; ++d)
             {
@@ -211,9 +221,15 @@ namespace Algoim
             double fac = denom * denom;
             double phi_xy = (term1 - term2) / fac;
             phi_xy -= term3 / (fac * denom);
+            term1 = (denom * numer_yx) + (numer_x(1) * denom_x(0));
+            term2 = (numer * denom_yx) + (denom_x(1) * numer_x(0));
+            term3 = 2 * ((denom * numer_x(1)) - (numer * denom_x(1))) * denom_x(0);
+            double phi_yx = (term1 - term2) / fac;
+            phi_yx -= term3 / (fac * denom);
             phix_bar(0) = phi_xx(0);
             phix_bar(1) = phi_xy;
-            phix_bar(2) = phi_xx(1);
+            phix_bar(2) = phi_yx;
+            phix_bar(3) = phi_xx(1);
             return phix_bar;
         }
 
@@ -295,7 +311,7 @@ namespace Algoim
                 double max_phi = max(dmax - phi_xc, -dmin + phi_xc);
                 phi_bnd += max_phi * min_psi;
             }
-          //  cout << phi_bnd << endl;
+            // cout << phi_bnd << endl;
             LevelSet<N> ls(xbnd, norm, rho, delta);
             TinyVector<double, N> beta = ls.grad(xc);
             double eps = phi_bnd;
@@ -307,9 +323,10 @@ namespace Algoim
             return phi;
         }
 
-        /// calculate the gradient of level-set function
-        /// \param[in] x - tinyvector of point where gradphi(x) needs to be calculated
-        /// \param[out] phi_bar - level-set function gradient value
+/// calculate the gradient of level-set function
+/// \param[in] x - tinyvector of point where gradphi(x) needs to be calculated
+/// \param[out] phi_bar - level-set function gradient value
+#if 1
         TinyVector<Interval<N>, N> grad(const blitz::TinyVector<Interval<N>, N> &x) const
         {
             using std::exp;
@@ -394,7 +411,8 @@ namespace Algoim
                 {
                     double dmin = 1e100;
                     double dmax = -1e100;
-                    double psi_bar = psi_xc * exp(-2 * rho * L);
+                    double psi_bar = psi_xc * exp(-2.0 * rho * L);
+                    double dij_max = -1e100;
                     for (int k = 0; k < nv; ++k)
                     {
                         TinyVector<double, N> ds;
@@ -402,6 +420,11 @@ namespace Algoim
                         double perp = dot(ds, norm.at(j));
                         dmin = min(dmin, perp);
                         dmax = max(dmax, perp);
+                        TinyVector<double, N> ds_jmax;
+                        ds_jmax = vert(k) - xbnd.at(j_max);
+                        double perp_jmax = dot(ds_jmax, norm.at(j_max));
+                        double d_diff = abs(perp - perp_jmax);
+                        dij_max = max(d_diff, dij_max);
                     }
                     double min_psi = min(bar_psi * (1 - psi_bar), 0.25);
                     double temp;
@@ -413,20 +436,27 @@ namespace Algoim
                     {
                         temp = 2.0 * rho * max(psi_bar * (1.0 - psi_bar), bar_psi * (1.0 - bar_psi));
                     }
+
+/// old bounds
+#if (0)
                     phix_bnd += max(dmax - djmin, -dmin + djmax) * temp;
                     phiy_bnd += max(dmax - djmin, -dmin + djmax) * temp;
+#endif
+                    /// new bounds
+                    phix_bnd += dij_max * temp;
+                    phiy_bnd += dij_max * temp;
                 }
             }
-           // cout << phix_bnd << " , " << phiy_bnd << endl;
+            // cout << phix_bnd << " , " << phiy_bnd << endl;
             double eps_x = phix_bnd;
             double eps_y = phiy_bnd;
-            TinyVector<double, N *(N + 1) / 2> hes;
+            TinyVector<double, 2 * N> hes;
             hes = hessian(xc);
             TinyVector<double, N> beta_x, beta_y;
             beta_x(0) = hes(0);
             beta_x(1) = hes(1);
-            beta_y(0) = hes(1);
-            beta_y(1) = hes(2);
+            beta_y(0) = hes(2);
+            beta_y(1) = hes(3);
             for (int dim = 0; dim < N; ++dim)
             {
                 eps_x -= std::abs(beta_x(dim)) * x(dim).delta(dim);
@@ -434,8 +464,129 @@ namespace Algoim
             }
             Interval<N> phi_x = Interval<N>(delx_phi, beta_x, eps_x);
             Interval<N> phi_y = Interval<N>(dely_phi, beta_y, eps_y);
+            // Interval<N> phi_x = Interval<N>(delx_phi, beta_x);
+            // Interval<N> phi_y = Interval<N>(dely_phi, beta_y);
             return blitz::TinyVector<Interval<N>, N>(phi_x, phi_y);
         }
+#endif
+#if 0
+        blitz::TinyVector<Interval<N>, N> grad(const blitz::TinyVector<Interval<N>, N> &x) const
+        {
+            using std::exp;
+            using std::sqrt;
+            double term1, term2;
+            /// get the centroid
+            TinyVector<double, N> xc;
+            xc(0) = x(0).alpha;
+            xc(1) = x(1).alpha;
+            TinyVector<double, N> delta_x, delta_y;
+            delta_x = x(0).delta();
+            TinyVector<double, N> phix_xc;
+            phix_xc = grad(xc);
+            /// get the element domain
+            TinyVector<double, N> x_max, x_min;
+            x_max = xc + x(0).delta();
+            x_min = xc - x(0).delta();
+            double dx = x(0).delta(0);
+            double dy = x(1).delta(1);
+            TinyVector<double, N> xmax;
+            xmax(0) = max(abs(x_max(0)), abs(x_min(0)));
+            xmax(1) = max(abs(x_max(1)), abs(x_min(1)));
+            // cout << "xmax " << xmax << endl;
+            TinyVector<double, N> phi_g, beta_x, beta_y;
+            TinyVector<double, N *(N + 1) / 2> hes;
+            hes = hessian(xmax);
+            beta_x(0) = hes(0);
+            beta_x(1) = hes(1);
+            beta_y(0) = hes(1);
+            beta_y(1) = hes(2);
+            phi_g = grad(xmax);
+            term1 = phi_g(0) * dx;
+            term2 = hes(1) * dy;
+            double phix_bnd = abs(term1 + term2);
+            term1 = phi_g(1) * dy;
+            term2 = hes(1) * dx;
+            double phiy_bnd = abs(term1 + term2);
+            double eps_x = phix_bnd;
+            double eps_y = phiy_bnd;
+            // cout << phix_bnd << " , " << phiy_bnd << endl;
+            for (int dim = 0; dim < N; ++dim)
+            {
+                eps_x -= std::abs(beta_x(dim)) * x(dim).delta(dim);
+                eps_y -= std::abs(beta_y(dim)) * x(dim).delta(dim);
+            }
+            // Interval<N> phi_x = Interval<N>(phix_xc(0), beta_x, eps_x);
+            // Interval<N> phi_y = Interval<N>(phix_xc(1), beta_y, eps_y);
+            Interval<N> phi_x = Interval<N>(phix_xc(0), beta_x);
+            Interval<N> phi_y = Interval<N>(phix_xc(1), beta_y);
+            return blitz::TinyVector<Interval<N>, N>(phi_x, phi_y);
+        }
+#endif
+#if 0
+        TinyVector<Interval<N>, N> grad(const blitz::TinyVector<Interval<N>, N> &x) const
+        {
+            int nbnd = xbnd.size();
+            /// find minimum distance
+            double min_dist = 0.0;
+            Interval<N> expc = Interval<N>(0);
+            for (int i = 0; i < nbnd; ++i)
+            {
+                TinyVector<Interval<N>, N> x_diff;
+                x_diff = x - xbnd.at(i);
+                Interval<N> deli_x = sqrt(magsqr(x_diff) + delta);
+                expc += exp(-rho * (deli_x - min_dist));
+                //min_dist = min(min_dist, deli_x);
+            }
+            Interval<N> numer = Interval<N>(0);
+            Interval<N> ls = Interval<N>(0);
+            for (int i = 0; i < nbnd; ++i)
+            {
+                TinyVector<Interval<N>, N> x_diff;
+                x_diff = x - xbnd.at(i);
+                Interval<N> perp = dot(x_diff, norm.at(i));
+                Interval<N> delx = sqrt(magsqr(x_diff) + delta);
+                Interval<N> logpsi = -rho * (delx - min_dist);
+                logpsi -= log(expc);
+                Interval<N> psi = exp(logpsi);
+                ls += perp * psi;
+            }
+            // start reverse sweep
+            // return ls
+            Interval<N> ls_bar = Interval<N>(1.0);
+            // ls = numer / denom
+            Interval<N> lognumer_bar = log(ls_bar) - log(expc);
+            Interval<N> numer_bar = exp(lognumer_bar);
+            Interval<N> logdenom_bar = -log(expc);
+            Interval<N> denom_bar = -ls * ls_bar * exp(logdenom_bar);
+            TinyVector<Interval<N>, N> phi_bar;
+            Interval<N> phi_x = Interval<N>(0);
+            Interval<N> phi_y = Interval<N>(0);
+            for (int i = 0; i < nbnd; ++i)
+            {
+                TinyVector<Interval<N>, N> x_diff;
+                x_diff = x - xbnd.at(i);
+                Interval<N> dist = sqrt(magsqr(x_diff) + delta);
+                Interval<N> perp = dot(x_diff, norm.at(i));
+                Interval<N> expfac = exp(-rho * (dist - min_dist));
+                // denom += expfac
+                Interval<N> expfac_bar = denom_bar;
+                expfac_bar += numer_bar * perp;
+                // numer += perp*expfac
+                Interval<N> perp_bar = numer_bar * expfac;
+                // expfac = exp(-rho*dist)
+                Interval<N> dist_bar = -expfac_bar * expfac * rho;
+                // perp = dot(levset.normal[:,i], x - xc)
+                phi_x += perp_bar * norm.at(i)(0);
+                phi_y += perp_bar * norm.at(i)(1);
+                // dist = sqrt(dot(x - xc, x - xc) + levset.delta)
+                Interval<N> logdist = -log(dist);
+                phi_x += (dist_bar * exp(logdist)) * x_diff(0);
+                phi_y += (dist_bar * exp(logdist)) * x_diff(1);
+                // phi_bar += (dist_bar / dist) * x_diff;
+            }
+            return blitz::TinyVector<Interval<N>, N>(phi_x, phi_y);
+        }
+#endif
 
     private:
         /// Vector of boundary coordinates

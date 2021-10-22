@@ -124,6 +124,8 @@ int main(int argc, char *argv[])
 {
     /// dimension
     const int N = 2;
+/// if reading from file
+#if 0
     //const char *geometry_file = "geometry_data/circle_1.dat";
     const char *geometry_file = "geometry_data/ellipse_1.dat";
     ifstream file;
@@ -145,16 +147,48 @@ int main(int argc, char *argv[])
         Xc.push_back(x);
     }
     file.close();
-    /// get the number of boundary points
-    int nbnd = Xc.size();
+#endif
+
+    /// # boundary poiints
+    int nbnd = 64;
     cout << "nbnd " << nbnd << endl;
-    /// construct the normal vector for all boundary points
-    nor = constructNormal<N>(Xc);
+    /// boundary coordinates
+    std::vector<TinyVector<double, N>> Xc;
+    /// boundary normal vector coords
+    std::vector<TinyVector<double, N>> nor;
     /// parameters
-    double rho = 10.0*nbnd;
+    double rho = 10.0 * nbnd;
     double delta = 1e-10;
+    /// major axis
+    double a = 4.0;
+    /// minor axis
+    double b = 1.0;
+    for (int k = 0; k < nbnd; ++k)
+    {
+        double theta = k * 2.0 * M_PI / nbnd;
+        TinyVector<double, N> x, nrm;
+        x(0) = a * cos(theta);
+        x(1) = b * sin(theta);
+        nrm(0) = 2.0 * cos(theta) / a;
+        nrm(1) = 2.0 * sin(theta) / b;
+        double ds = mag(nrm);
+        TinyVector<double, N> ni;
+        ni = nrm / ds;
+        Xc.push_back(x);
+        nor.push_back(ni);
+    }
+    /// evaluate levelset and it's gradient
+    Algoim::LevelSet<N> phi(Xc, nor, rho, delta);
+    TinyVector<double, N> x;
+    x(0) = 2.0;
+    x(1) = 0.8;
+    std::cout << std::setprecision(10) << std::endl;
+    cout << "phi " << phi(x) << endl;
+    cout << "grad phi " << phi.grad(x) << endl;
+    cout << "hessian phi " << phi.hessian(x) << endl;
+    cout << " ------------------------------------------- " << endl;
     /// get the bounds
-    const int nel = 10;
+    const int nel = 80;
     double ymin = -2.0;
     double ymax = 2.0;
     double xslice = 3.0;

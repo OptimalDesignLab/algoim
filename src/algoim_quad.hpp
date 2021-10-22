@@ -388,6 +388,7 @@ namespace Algoim
         ImplicitIntegral(const Phi& phi, F& f, const TinyVector<bool,N>& free, const std::array<PsiCode<N>,1 << (N-1)>& psi_, int psiCount_, const BoundingBox<Real,N>& xrange, int p, int level = 0)
             : phi(phi), f(f), free(free), psi(psi_), psiCount(psiCount_), xrange(xrange), p(p)
         {
+            // std::cout << "level = " << level << std::endl;
             // For the one-dimensional base case, evaluate the bottom-level integral.
             if (M == 1)
             {
@@ -397,7 +398,6 @@ namespace Algoim
                 evalIntegrand(Real(0.0), Real(1.0));
                 return;
             }
-            // std::cout << "inside ImplicitIntegral() " << std::endl;
             // Establish interval bounds for prune() and remaining part of ctor.
             for (int dim = 0; dim < N; ++dim)
             {
@@ -584,9 +584,10 @@ namespace Algoim
         stream << "<Piece NumberOfPoints=\"" << q.nodes.size() << "\" NumberOfVerts=\"" << q.nodes.size() << "\" NumberOfLines=\"0\" NumberOfStrips=\"0\" NumberOfPolys=\"0\">\n";
         stream << "<Points>\n";
         stream << "  <DataArray type=\"Float32\" Name=\"Points\" NumberOfComponents=\"3\" format=\"ascii\">";
+        std::cout << "are you listening me ? " << std::endl;
         for (const auto& pt : q.nodes)
         {
-            stream << pt.x(0) << ' ' << pt.x(1) << ' ';
+            stream << pt.x(0) << ' ' << pt.x(1) << ' ' << 0.0 << ' ';
             if (N == 3)
                 stream << pt.x(2) << ' ';
         }
