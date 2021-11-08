@@ -426,9 +426,9 @@ namespace Algoim
                         double d_diff = abs(perp - perp_jmax);
                         dij_max = max(d_diff, dij_max);
                     }
-                    double min_psi = min(bar_psi * (1 - psi_bar), 0.25);
+                    double min_psi = min(bar_psi * (1.0 - psi_bar), 0.25);
                     double temp;
-                    if ((bar_psi > 0.5) && (psi_bar < 0.5))
+                    if ((bar_psi >= 0.5) && (psi_bar <= 0.5))
                     {
                         temp = 2.0 * rho * 0.25;
                     }
