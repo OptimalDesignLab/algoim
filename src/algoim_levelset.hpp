@@ -24,7 +24,6 @@ public:
     // LevelSet(vector<TinyVector<double, N>> _xbnd, vector<TinyVector<double, N>> _norm,
     //          double _rho, double _delta = 1e-10)
     //     : xbnd(_xbnd), norm(_norm), rho(_rho), delta(_delta) {}
-
     void initializeLevelSet(vector<TinyVector<double, N>> _xbnd, vector<TinyVector<double, N>> _norm,
                             double _rho, double _delta = 1e-10)
     {
