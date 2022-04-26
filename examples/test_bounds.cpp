@@ -1,5 +1,5 @@
 #include <fstream>
-#include "/users/kaurs3/Sharan/Research/Spring_2020/algoim_fork/src/algoim_levelset.hpp"
+#include "algoim_levelset.hpp"
 #include <iostream>
 using namespace std;
 
@@ -42,6 +42,7 @@ std::vector<TinyVector<double, N>> constructNormal(std::vector<TinyVector<double
 /// This functions evaluates the level-set bounds along given x = xslice
 /// \param[in] Xc - boundary coordinates
 /// \param[in] nor - boundary normal vectors
+/// \param[in] kappa - boundary curvature
 /// \param[in] xslice - slice in x direction
 /// \param[in] ymax - maximum `y` coordinate
 /// \param[in] ymin - minimum `y` coordinate
@@ -49,11 +50,12 @@ std::vector<TinyVector<double, N>> constructNormal(std::vector<TinyVector<double
 /// \param[in] rho - penalty parameter
 /// \param[in] delta- parameter that smooths distance near zero
 template <int N>
-void testLevelSetBounds(vector<TinyVector<double, N>> Xc, vector<TinyVector<double, N>> nor,
+void testLevelSetBounds(vector<TinyVector<double, N>> Xc, vector<TinyVector<double, N>> nor, vector<TinyVector<double, N-1>> kappa,
                         double xslice, double ymax, double ymin, const int nel, int rho, double delta)
 {
     /// create level-set object
-    Algoim::LevelSet<N> phi(Xc, nor, rho, delta);
+    Algoim::LevelSet<N> phi;
+    phi.initializeLevelSet(Xc, nor, kappa, rho, 1.0, delta);
     TinyVector<double, N> del;
     TinyVector<Interval<N>, N> phic;
     double ds = (ymax - ymin) / nel;
@@ -70,6 +72,8 @@ void testLevelSetBounds(vector<TinyVector<double, N>> Xc, vector<TinyVector<doub
         yelem(0) = (ymax - ymin) * (k) / nel + ymin;
         yelem(1) = (ymax - ymin) * (k + 1) / nel + ymin;
         xc(1) = 0.5 * (yelem(0) + yelem(1));
+        // xc(0) = 2.0;
+        // xc(1) = 0.8;
         Interval<N> x_c = Interval<N>(xc(0));
         Interval<N> y_c = Interval<N>(xc(1));
         x_c.delta() = del;
@@ -89,11 +93,12 @@ void testLevelSetBounds(vector<TinyVector<double, N>> Xc, vector<TinyVector<doub
 /// \param[in] rho - penalty parameter
 /// \param[in] delta- parameter that smooths distance near zero
 template <int N>
-void testLevelSetGradBounds(vector<TinyVector<double, N>> Xc, vector<TinyVector<double, N>> nor,
+void testLevelSetGradBounds(vector<TinyVector<double, N>> Xc, vector<TinyVector<double, N>> nor, vector<TinyVector<double, N-1>> kappa,
                             double xslice, double ymax, double ymin, const int nel, int rho, double delta)
 {
     /// create level-set object
-    Algoim::LevelSet<N> phi(Xc, nor, rho, delta);
+    Algoim::LevelSet<N> phi;
+    phi.initializeLevelSet(Xc, nor, kappa, rho, 1.0, delta);
     TinyVector<double, N> del;
     TinyVector<Interval<N>, N> phic;
     double ds = (ymax - ymin) / nel;
@@ -150,14 +155,16 @@ int main(int argc, char *argv[])
 #endif
 
     /// # boundary poiints
-    int nbnd = 64;
+    int nbnd = 32;
     cout << "nbnd " << nbnd << endl;
     /// boundary coordinates
     std::vector<TinyVector<double, N>> Xc;
     /// boundary normal vector coords
     std::vector<TinyVector<double, N>> nor;
+    /// boundary curvature
+    std::vector<TinyVector<double, N-1>> kappa;
     /// parameters
-    double rho = 10.0 * nbnd;
+    double rho = 2.0;
     double delta = 1e-10;
     /// major axis
     double a = 4.0;
@@ -176,9 +183,21 @@ int main(int argc, char *argv[])
         ni = nrm / ds;
         Xc.push_back(x);
         nor.push_back(ni);
+        /// curvature correction
+        TinyVector<double, N> dx, d2x;
+        dx = {-a * sin(theta), b * cos(theta)};
+        d2x = {-a * cos(theta), -b * sin(theta)};
+        double num = (dx(0) * d2x(1) - dx(1) * d2x(0));
+        double mag_dx = mag(dx);
+        double den = mag_dx * mag_dx * mag_dx;
+        TinyVector<double, N - 1> curv;
+        //curv(0) = num / den;
+        curv(0) = 0.0;
+        kappa.push_back(curv);
     }
     /// evaluate levelset and it's gradient
-    Algoim::LevelSet<N> phi(Xc, nor, rho, delta);
+    Algoim::LevelSet<N> phi;
+    phi.initializeLevelSet(Xc, nor, kappa, rho, 1.0, delta);
     TinyVector<double, N> x;
     x(0) = 2.0;
     x(1) = 0.8;
@@ -188,12 +207,12 @@ int main(int argc, char *argv[])
     cout << "hessian phi " << phi.hessian(x) << endl;
     cout << " ------------------------------------------- " << endl;
     /// get the bounds
-    const int nel = 80;
+    const int nel = 20;
     double ymin = -2.0;
     double ymax = 2.0;
     double xslice = 3.0;
     cout << setprecision(12) << endl;
-    testLevelSetBounds<N>(Xc, nor, xslice, ymax, ymin, nel, rho, delta);
-    testLevelSetGradBounds<N>(Xc, nor, xslice, ymax, ymin, nel, rho, delta);
+    testLevelSetBounds<N>(Xc, nor, kappa, xslice, ymax, ymin, nel, rho, delta);
+    //testLevelSetGradBounds<N>(Xc, nor, kappa, xslice, ymax, ymin, nel, rho, delta);
     return 0;
 } // main ends

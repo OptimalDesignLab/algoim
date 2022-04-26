@@ -7,6 +7,8 @@
 #include "algoim_blitzinc.hpp"
 #include "algoim_utility.hpp"
 #include "algoim_quad.hpp"
+#include <chrono>
+using namespace std::chrono;
 using namespace blitz;
 using namespace std;
 using namespace Algoim;
@@ -25,7 +27,7 @@ namespace Algoim
         //          double _rho, double _delta = 1e-10)
         //     : xbnd(_xbnd), norm(_norm), rho(_rho), delta(_delta) {}
         void initializeLevelSet(vector<TinyVector<double, N>> _xbnd, vector<TinyVector<double, N>> _norm,
-                                vector<TinyVector<double, N-1>> _kappa, double _rho, double _lsign = -1.0, double _delta = 1e-10)
+                                vector<TinyVector<double, N - 1>> _kappa, double _rho, double _lsign = -1.0, double _delta = 1e-10)
         {
             xbnd = _xbnd;
             norm = _norm;
@@ -72,8 +74,8 @@ namespace Algoim
                 double dist1 = dot(x_diff, norm.at(i));
                 double nx = norm.at(i)(0);
                 double ny = norm.at(i)(1);
-                norvx = {1.0 - (nx * nx), - nx * ny};
-                norvy = {- nx * ny, 1.0 - (ny * ny)};
+                norvx = {1.0 - (nx * nx), -nx * ny};
+                norvy = {-nx * ny, 1.0 - (ny * ny)};
                 proj(0) = dot(norvx, x_diff);
                 proj(1) = dot(norvy, x_diff);
                 double dist2 = 0.5 * kappa.at(i)(0) * dot(x_diff, proj);
@@ -118,8 +120,8 @@ namespace Algoim
                 double perp1 = dot(x_diff, norm.at(i));
                 double nx = norm.at(i)(0);
                 double ny = norm.at(i)(1);
-                norvx = {1.0 - (nx * nx), - nx * ny};
-                norvy = {- nx * ny, 1.0 - (ny * ny)};
+                norvx = {1.0 - (nx * nx), -nx * ny};
+                norvy = {-nx * ny, 1.0 - (ny * ny)};
                 proj(0) = dot(norvx, x_diff);
                 proj(1) = dot(norvy, x_diff);
                 double perp2 = 0.5 * kappa.at(i)(0) * dot(x_diff, proj);
@@ -326,6 +328,123 @@ namespace Algoim
         /// calculate the level-set function value (here the data type is interval)
         /// \param[in] x - tinyvector of point where phi(x) needs to be calculated
         /// \param[out] phi - level-set function value
+        #if 1
+        Interval<N> operator()(const blitz::TinyVector<Interval<N>, N> &xs) const
+        {
+            using std::exp;
+            using std::sqrt;
+            auto t1_start = high_resolution_clock::now();
+            TinyVector<Interval<N>, N> x;
+            x[0] = xs[0] * xscale + min_x;
+            x[1] = xs[1] * yscale + min_y;
+            int nbnd = xbnd.size();
+            /// find minimum distance
+            double min_dist = 1e+100;
+            /// get the centroid
+            TinyVector<double, N> xc;
+            xc[0] = x(0).alpha;
+            xc[1] = x(1).alpha;
+            /// find minimum distance
+            for (int i = 0; i < nbnd; ++i)
+            {
+                TinyVector<double, N> x_diff;
+                x_diff = xc - xbnd.at(i);
+                /// this needs to be replaced with interval type 
+                double deli_x = sqrt(magsqr(x_diff) + delta);
+                min_dist = min(min_dist, deli_x);
+            }
+            double denom = 0.0;
+            double phi_xc = 0.0;
+            /// evaluate the level-set
+            for (int i = 0; i < nbnd; ++i)
+            {
+                TinyVector<double, N> x_diff;
+                TinyVector<double, N> norvx, norvy;
+                TinyVector<double, N> proj;
+                x_diff = xc - xbnd.at(i);
+                double dist1 = dot(x_diff, norm.at(i));
+                double nx = norm.at(i)(0);
+                double ny = norm.at(i)(1);
+                norvx = {1.0 - (nx * nx), -nx * ny};
+                norvy = {-nx * ny, 1.0 - (ny * ny)};
+                proj(0) = dot(norvx, x_diff);
+                proj(1) = dot(norvy, x_diff);
+                double dist2 = 0.5 * kappa.at(i)(0) * dot(x_diff, proj);
+                double dist = dist1 + dist2;
+                double delx = sqrt(magsqr(x_diff) + delta);
+                double expc = exp(-rho * (delx - min_dist));
+                denom += expc;
+                phi_xc += dist * expc;
+            }
+            phi_xc = phi_xc / denom;
+            /// get the element domain
+            TinyVector<double, N> xmin;
+            TinyVector<double, N> xmax;
+            xmax = xc + x(0).delta();
+            xmin = xc - x(0).delta();
+            const int nv = pow(2, N);
+            /// get element vertices
+            TinyVector<TinyVector<double, N>, nv> vert;
+            // \Note- need to modify this
+            vert(0) = xmin;
+            vert(1) = {xmax(0), xmin(1)};
+            vert(2) = xmax;
+            vert(3) = {xmin(0), xmax(1)};
+            TinyVector<double, N> dx = x(0).delta();
+            double L = sqrt(magsqr(dx));
+            double fac = exp(2.0 * rho * L);
+            /// evaluate level-set bounds
+            double phi_bnd = 0.0;
+            for (int i = 0; i < nbnd; ++i)
+            {
+                double d1min = 1e100;
+                double d1max = -1e100;
+                double d2min = 1e100;
+                double d2max = -1e100;
+                for (int k = 0; k < nv; ++k)
+                {
+                    TinyVector<double, N> ds;
+                    ds = vert(k) - xbnd.at(i);
+                    double perp1 = dot(ds, norm.at(i));
+                    d1min = min(d1min, perp1);
+                    d1max = max(d1max, perp1);
+                }
+                TinyVector<double, N> x_diff;
+                TinyVector<double, N> tan;
+                tan = {norm.at(i)(1), - norm.at(i)(0)};
+                x_diff = xc - xbnd.at(i);
+                double perp_tan = dot(x_diff, tan);
+                double delx = sqrt(magsqr(x_diff) + delta);
+                double expc = exp(-rho * (delx - min_dist));
+                double psi_xc = expc / denom;
+                double min_psi = min(psi_xc * fac, 1.0);
+                double max_phi = max(d1max - phi_xc, -d1min + phi_xc);
+                double dist_quad = (L*L) + (2.0*L*abs(perp_tan)) + (abs(perp_tan)*abs(perp_tan));
+                dist_quad *= 0.5 * abs(kappa.at(i)(0)) ;
+                phi_bnd += (max_phi + dist_quad) * min_psi;
+            }
+            // cout << phi_bnd << endl;
+            LevelSet<N> ls;
+            ls.initializeLevelSet(xbnd, norm, kappa, rho, lsign, delta);
+            /// need to scale back to reference element space
+            TinyVector<double, N> xcs;
+            xcs(0) = (xc(0) - min_x) / xscale;
+            xcs(1) = (xc(1) - min_y) / yscale;
+            TinyVector<double, N> beta = lsign * ls.grad(xcs);
+            double eps = phi_bnd;
+            for (int dim = 0; dim < N; ++dim)
+            {
+                eps -= std::abs(beta(dim)) * x(dim).delta(dim);
+            }
+            Interval<N> phi = Interval<N>(phi_xc, beta, eps);
+            // auto t1_stop = high_resolution_clock::now();
+            // auto t1_duration = duration_cast<seconds>(t1_stop - t1_start);
+            // cout << "time taken inside phi() " << t1_duration.count() << endl;
+            //cout << "cphi " << cphi << endl;
+            return lsign * phi;
+        }
+        #endif
+        # if 0
         Interval<N> operator()(const blitz::TinyVector<Interval<N>, N> &xs) const
         {
             using std::exp;
@@ -360,8 +479,8 @@ namespace Algoim
                 double dist1 = dot(x_diff, norm.at(i));
                 double nx = norm.at(i)(0);
                 double ny = norm.at(i)(1);
-                norvx = {1.0 - (nx * nx), - nx * ny};
-                norvy = {- nx * ny, 1.0 - (ny * ny)};
+                norvx = {1.0 - (nx * nx), -nx * ny};
+                norvy = {-nx * ny, 1.0 - (ny * ny)};
                 proj(0) = dot(norvx, x_diff);
                 proj(1) = dot(norvy, x_diff);
                 double dist2 = 0.5 * kappa.at(i)(0) * dot(x_diff, proj);
@@ -426,7 +545,7 @@ namespace Algoim
                 double max_d2 = max(d2max, -d2min);
                 phi_bnd += (max_phi + max_d2) * min_psi;
             }
-            // cout << phi_bnd << endl;
+            //cout << phi_bnd << endl;
             LevelSet<N> ls;
             ls.initializeLevelSet(xbnd, norm, kappa, rho, lsign, delta);
             /// need to scale back to reference element space
@@ -442,11 +561,234 @@ namespace Algoim
             Interval<N> phi = Interval<N>(phi_xc, beta, eps);
             return lsign * phi;
         }
+        #endif
 
         /// calculate the gradient of level-set function
         /// \param[in] x - tinyvector of point where gradphi(x) needs to be calculated
         /// \param[out] phi_bar - level-set function gradient value
+        #if 1
+        TinyVector<Interval<N>, N> grad(const blitz::TinyVector<Interval<N>, N> &xs) const
+        {
+            using std::exp;
+            using std::sqrt;
+            // cout << "inside gradphi() " <<  endl;
+            auto t2_start = high_resolution_clock::now();
+            // scale the x values for physical space
+            TinyVector<Interval<N>, N> x;
+            x[0] = xs[0] * xscale + min_x;
+            x[1] = xs[1] * yscale + min_y;
+            TinyVector<double, N> xc;
+            xc(0) = x(0).alpha;
+            xc(1) = x(1).alpha;
+            int nbnd = xbnd.size();
+            /// find minimum distance
+            double min_dist = 1e+100;
+            /// find `j` index at which psi(xc) is largest
+            int j_max = 0;
+            for (int i = 0; i < nbnd; ++i)
+            {
+                TinyVector<double, N> x_diff;
+                x_diff = xc - xbnd.at(i);
+                double deli_x = sqrt(magsqr(x_diff) + delta);
+                //min_dist = min(min_dist, deli_x);
+                if (deli_x < min_dist)
+                {
+                    min_dist = deli_x;
+                    j_max = i;
+                }
+            }
+            double denom = 0.0;
+            double phi_xc = 0.0;
+            /// evaluate the level-set
+            for (int i = 0; i < nbnd; ++i)
+            {
+                TinyVector<double, N> x_diff;
+                TinyVector<double, N> norvx, norvy;
+                TinyVector<double, N> proj;
+                x_diff = xc - xbnd.at(i);
+                double dist1 = dot(x_diff, norm.at(i));
+                double nx = norm.at(i)(0);
+                double ny = norm.at(i)(1);
+                norvx = {1.0 - (nx * nx), -nx * ny};
+                norvy = {-nx * ny, 1.0 - (ny * ny)};
+                proj(0) = dot(norvx, x_diff);
+                proj(1) = dot(norvy, x_diff);
+                double dist2 = 0.5 * kappa.at(i)(0) * dot(x_diff, proj);
+                double dist = dist1 + dist2;
+                double delx = sqrt(magsqr(x_diff) + delta);
+                double expc = exp(-rho * (delx - min_dist));
+                denom += expc;
+                phi_xc += dist * expc;
+            }
+            phi_xc = phi_xc / denom;
+            TinyVector<double, N> dx = x(0).delta();
+            double L = sqrt(magsqr(dx));
+            LevelSet<N> ls;
+            ls.initializeLevelSet(xbnd, norm, kappa, rho, lsign, delta);
+            /// scale back to reference element
+            TinyVector<double, N> xcs;
+            xcs(0) = (xc(0) - min_x) / xscale;
+            xcs(1) = (xc(1) - min_y) / yscale;
+            TinyVector<double, N> beta = lsign * ls.grad(xcs);
 
+            double delx_phi = beta(0);
+            double dely_phi = beta(1);
+
+            /// calculate levelset derivative bounds
+            TinyVector<double, N> xmin;
+            TinyVector<double, N> xmax;
+            xmax = xc + x(0).delta();
+            xmin = xc - x(0).delta();
+            const int nv = pow(2, N);
+
+            TinyVector<TinyVector<double, N>, nv> vert;
+            // \Note- need to modify this
+            vert(0) = xmin;
+            vert(1) = {xmax(0), xmin(1)};
+            vert(2) = xmax;
+            vert(3) = {xmin(0), xmax(1)};
+            double phix_bnd = 0.0;
+            double phiy_bnd = 0.0;
+            // bounding the first term 
+            for (int i = 0; i < nbnd; ++i)
+            {
+                TinyVector<double, N> x_diff;
+                x_diff = xc - xbnd.at(i);
+                double deli_x = sqrt(magsqr(x_diff) + delta);
+                double expc = exp(-rho * (deli_x - min_dist));
+                double psi_xc = expc / denom;
+                double bar_psi = min(1.0, psi_xc * exp(2.0 * rho * L));
+                TinyVector<double, N> tan;
+                tan = {norm.at(i)(1), -norm.at(i)(0)};
+                double perp1_x = norm.at(i)(0);
+                double perp1_y = norm.at(i)(1);
+                double djmax_x = -1e100;
+                double djmax_y = -1e100;
+                double dix_max = -1e100;
+                double diy_max = -1e100;
+                double dix_min = 1e100;
+                double diy_min = 1e100;
+                for (int k = 0; k < nv; ++k)
+                {
+                    TinyVector<double, N> ds;
+                    ds = vert(k) - xbnd.at(i);
+                    double perp_tan = dot(tan, ds);
+                    double perp2_x = kappa.at(i)(0) * tan(0) * perp_tan;
+                    double perp2_y = kappa.at(i)(0) * tan(1) * perp_tan;
+                    dix_max = max(perp1_x + perp2_x, dix_max);
+                    dix_min = min(perp1_x + perp2_x, dix_min);
+                    diy_max = max(perp1_y + perp2_y, diy_max);
+                    diy_min = min(perp1_y + perp2_y, diy_min);
+                    djmax_x = max(abs(perp1_x + perp2_x - delx_phi), djmax_x);
+                    djmax_y = max(abs(perp1_y + perp2_y - dely_phi), djmax_y);
+                }
+                // use these for linear distance
+                #if 1
+                phix_bnd += djmax_x * bar_psi;
+                phiy_bnd += djmax_y * bar_psi;
+                #endif
+                #if 0
+                phix_bnd += max(dix_max - delx_phi, -dix_min + delx_phi) * bar_psi;
+                phiy_bnd += max(diy_max - dely_phi, -diy_min + dely_phi) * bar_psi;
+                #endif
+            }
+            /// bound the second term 
+            for (int j = 0; j < nbnd; ++j)
+            {
+                if (j != j_max)
+                {
+                    TinyVector<double, N> x_diff;
+                    x_diff = xc - xbnd.at(j);
+                    double deli_x = sqrt(magsqr(x_diff) + delta);
+                    double expc = exp(-rho * (deli_x - min_dist));
+                    double psi_xc = expc / denom;
+                    double bar_psi = min(1.0, psi_xc * exp(2.0 * rho * L ));
+                    double psi_bar = psi_xc * exp(-2.0 * rho * L);
+                    double dij_max = -1e100;
+                    for (int k = 0; k < nv; ++k)
+                    {
+                        TinyVector<double, N> ds;
+                        ds = vert(k) - xbnd.at(j);
+                        double perp1 = dot(ds, norm.at(j));
+                        TinyVector<double, N> ds_jmax;
+                        ds_jmax = vert(k) - xbnd.at(j_max);
+                        double perp1_jmax = dot(ds_jmax, norm.at(j_max));
+                        double d_diff = abs(perp1 - perp1_jmax);
+                        dij_max = max(d_diff, dij_max);
+                    }
+                /// curvature correction 
+                TinyVector<double, N> ds_j, ds_jmax;
+                ds_j = xc - xbnd.at(j);
+                ds_jmax = xc - xbnd.at(j_max);
+                TinyVector<double, N> tan_j, tan_jmax;
+                tan_j = {norm.at(j)(1), -norm.at(j)(0)};
+                tan_jmax = {norm.at(j_max)(1), -norm.at(j_max)(0)};
+                double perpj_tan = dot(tan_j ,ds_j);
+                double perpjmax_tan = dot(tan_jmax ,ds_jmax);
+                double disti_quad = (L*L) + (2.0*abs(L)*abs(perpj_tan)) + (abs(perpj_tan)*abs(perpj_tan));
+                disti_quad *= 0.5 * abs(kappa.at(j)(0));
+                double d1min = 1e100;
+                double d1max = -1e100;
+                double d2min = 1e100;
+                double d2max = -1e100;
+                for (int k = 0; k < nv; ++k)
+                {
+                    TinyVector<double, N> ds;
+                    ds = vert(k) - xbnd.at(j);
+                    double perp1 = dot(ds, norm.at(j));
+                    d1min = min(d1min, perp1);
+                    d1max = max(d1max, perp1);
+                }
+                double max_phi = max(d1max - phi_xc, -d1min + phi_xc);
+
+                double distj_quad = (L*L) + (2.0*abs(L)*abs(perpjmax_tan)) + (abs(perpjmax_tan)*abs(perpjmax_tan));
+                distj_quad *= 0.5 * abs(kappa.at(j_max)(0));
+                double min_psi = min(bar_psi * (1.0 - psi_bar), 0.25);
+                double temp;
+                if ((bar_psi >= 0.5) && (psi_bar <= 0.5))
+                {
+                    temp = 2.0 * rho * 0.25;
+                }
+                else
+                {
+                    temp = 2.0 * rho * max(psi_bar * (1.0 - psi_bar), bar_psi * (1.0 - bar_psi));
+                }
+                /// final bounds
+                // phix_bnd += (max_phi + disti_quad) * temp;
+                // phiy_bnd += (max_phi + disti_quad) * temp;
+                #if 1
+                phix_bnd += (dij_max + disti_quad - distj_quad) * temp;
+                phiy_bnd += (dij_max + disti_quad - distj_quad)* temp;
+                #endif
+            }   
+        }
+            // cout << phix_bnd << " , " << phiy_bnd << endl;
+            double eps_x = phix_bnd;
+            double eps_y = phiy_bnd;
+            TinyVector<double, 2 * N> hes;
+            hes = hessian(xc);
+            TinyVector<double, N> beta_x, beta_y;
+            beta_x(0) = hes(0);
+            beta_x(1) = hes(1);
+            beta_y(0) = hes(2);
+            beta_y(1) = hes(3);
+            for (int dim = 0; dim < N; ++dim)
+            {
+                eps_x -= std::abs(beta_x(dim)) * x(dim).delta(dim);
+                eps_y -= std::abs(beta_y(dim)) * x(dim).delta(dim);
+            }
+            Interval<N> phi_x = Interval<N>(delx_phi, beta_x, eps_x);
+            Interval<N> phi_y = Interval<N>(dely_phi, beta_y, eps_y);
+            // Interval<N> phi_x = Interval<N>(delx_phi, beta_x);
+            // Interval<N> phi_y = Interval<N>(dely_phi, beta_y);
+            // auto t2_stop = high_resolution_clock::now();
+            // auto t2_duration = duration_cast<seconds>(t2_stop - t2_start);
+            // cout << "time taken inside gradphi() " << t2_duration.count() << endl;
+            return blitz::TinyVector<Interval<N>, N>(lsign * phi_x, lsign * phi_y);
+        }
+        #endif
+
+        #if 0
         TinyVector<Interval<N>, N> grad(const blitz::TinyVector<Interval<N>, N> &xs) const
         {
             using std::exp;
@@ -476,16 +818,29 @@ namespace Algoim
                 }
             }
             double denom = 0.0;
+            double phi_xc = 0.0;
             /// evaluate the level-set
             for (int i = 0; i < nbnd; ++i)
             {
                 TinyVector<double, N> x_diff;
+                TinyVector<double, N> norvx, norvy;
+                TinyVector<double, N> proj;
                 x_diff = xc - xbnd.at(i);
-                // double dist = dot(x_diff, norm.at(i));
+                double dist1 = dot(x_diff, norm.at(i));
+                double nx = norm.at(i)(0);
+                double ny = norm.at(i)(1);
+                norvx = {1.0 - (nx * nx), -nx * ny};
+                norvy = {-nx * ny, 1.0 - (ny * ny)};
+                proj(0) = dot(norvx, x_diff);
+                proj(1) = dot(norvy, x_diff);
+                double dist2 = 0.5 * kappa.at(i)(0) * dot(x_diff, proj);
+                double dist = dist1 + dist2;
                 double delx = sqrt(magsqr(x_diff) + delta);
                 double expc = exp(-rho * (delx - min_dist));
                 denom += expc;
+                phi_xc += dist * expc;
             }
+            phi_xc = phi_xc / denom;
             /// calculate levelset derivative bounds
             TinyVector<double, N> xmin;
             TinyVector<double, N> xmax;
@@ -524,7 +879,6 @@ namespace Algoim
             double L = sqrt(magsqr(dx));
             LevelSet<N> ls;
             ls.initializeLevelSet(xbnd, norm, kappa, rho, lsign, delta);
-
             /// scale back to reference element
             TinyVector<double, N> xcs;
             xcs(0) = (xc(0) - min_x) / xscale;
@@ -561,13 +915,64 @@ namespace Algoim
                 double expc = exp(-rho * (deli_x - min_dist));
                 double psi_xc = expc / denom;
                 double bar_psi = min(1.0, psi_xc * exp(2 * rho * L));
+                double psi_bar = psi_xc * exp(-2.0 * rho * L);
+                double d1min = 1e100;
+                double d1max = -1e100;
+                double d2min = 1e100;
+                double d2max = -1e100;
+                double dix_min = 1e100;
+                double dix_max = -1e100;
+                double diy_min = 1e100;
+                double diy_max = -1e100;
+                for (int k = 0; k < nv; ++k)
+                {
+                    TinyVector<double, N> ds;
+                    TinyVector<double, N> norvx, norvy;
+                    TinyVector<double, N> proj;
+                    ds = vert(k) - xbnd.at(j);
+                    double perp1 = dot(ds, norm.at(j));
+                    double nx = norm.at(j)(0);
+                    double ny = norm.at(j)(1);
+                    norvx = {1.0 - (nx * nx), -nx * ny};
+                    norvy = {-nx * ny, 1.0 - (ny * ny)};
+                    proj(0) = dot(norvx, ds);
+                    proj(1) = dot(norvy, ds);
+                    double perp2 = 0.5 * kappa.at(j)(0) * dot(ds, proj);
+                    // bounding the first sum in derivative
+                    double perp = perp1 + perp2;
+                    d1min = min(d1min, perp1);
+                    d1max = max(d1max, perp1);
+                    d2min = min(d2min, perp2);
+                    d2max = max(d2max, perp2);
+                    // bounding the second sum in derivative
+                    TinyVector<double, N> perp2_xv;
+                    perp2_xv = kappa.at(j)(0) * proj;
+                    double delx_perp2 = perp2_xv(0);
+                    double dely_perp2 = perp2_xv(1);
+                    double delx_perp = delx_perp1 + delx_perp2;
+                    double dely_perp = dely_perp1 + dely_perp2;
+                    dix_min = min(delx_perp, dix_min);
+                    dix_max = max(delx_perp, dix_max);
+                    diy_min = min(dely_perp, diy_min);
+                    diy_max = max(dely_perp, diy_max);
+                }
+                double max_d1_phi = max(d1max - phi_xc, -d1min + phi_xc);
+                double max_d2_phi = max(d2max, -d2min);
+/// use these for quadratic di(x)
+#if 1
+                phix_bnd += max(dix_max - delx_phi, -dix_min + delx_phi) * bar_psi;
+                phiy_bnd += max(diy_max - dely_phi, -diy_min + dely_phi) * bar_psi;
+#endif
+/// use these for linear di(x)
+#if 0
                 phix_bnd += abs(delx_perp - delx_phi) * bar_psi;
                 phiy_bnd += abs(dely_perp - dely_phi) * bar_psi;
+#endif
+
                 if (j != j_max)
                 {
                     double dmin = 1e100;
                     double dmax = -1e100;
-                    double psi_bar = psi_xc * exp(-2.0 * rho * L);
                     double dij_max = -1e100;
                     for (int k = 0; k < nv; ++k)
                     {
@@ -602,27 +1007,31 @@ namespace Algoim
                         double d_diff = abs(perp - perp_jmax);
                         dij_max = max(d_diff, dij_max);
                     }
-                    double min_psi = min(bar_psi * (1.0 - psi_bar), 0.25);
-                    double temp;
-                    if ((bar_psi >= 0.5) && (psi_bar <= 0.5))
-                    {
-                        temp = 2.0 * rho * 0.25;
-                    }
-                    else
-                    {
-                        temp = 2.0 * rho * max(psi_bar * (1.0 - psi_bar), bar_psi * (1.0 - bar_psi));
-                    }
-
-/// old bounds
-#if (0)
-                    phix_bnd += max(dmax - djmin, -dmin + djmax) * temp;
-                    phiy_bnd += max(dmax - djmin, -dmin + djmax) * temp;
-#endif
-                    /// new bounds
-                    phix_bnd += dij_max * temp;
-                    phiy_bnd += dij_max * temp;
+                double min_psi = min(bar_psi * (1.0 - psi_bar), 0.25);
+                double temp;
+                if ((bar_psi >= 0.5) && (psi_bar <= 0.5))
+                {
+                    temp = 2.0 * rho * 0.25;
                 }
+                else
+                {
+                    temp = 2.0 * rho * max(psi_bar * (1.0 - psi_bar), bar_psi * (1.0 - bar_psi));
+                }
+#if (0)
+                /// old bounds
+                phix_bnd += max(dmax - djmin, -dmin + djmax) * temp;
+                phiy_bnd += max(dmax - djmin, -dmin + djmax) * temp;
+                /// new bounds
+                phix_bnd += dij_max * temp;
+                phiy_bnd += dij_max * temp;
+#endif
+                /// old bounds
+                phix_bnd += dij_max * temp;
+                phiy_bnd += dij_max * temp;
+                // phix_bnd += (max_d1_phi + max_d2_phi) * temp;
+                // phiy_bnd += (max_d1_phi + max_d2_phi) * temp;
             }
+        }
             // cout << phix_bnd << " , " << phiy_bnd << endl;
             double eps_x = phix_bnd;
             double eps_y = phiy_bnd;
@@ -644,6 +1053,7 @@ namespace Algoim
             // Interval<N> phi_y = Interval<N>(dely_phi, beta_y);
             return blitz::TinyVector<Interval<N>, N>(lsign * phi_x, lsign * phi_y);
         }
+        #endif
 #if 0
         blitz::TinyVector<Interval<N>, N> grad(const blitz::TinyVector<Interval<N>, N> &x) const
         {
@@ -766,6 +1176,8 @@ namespace Algoim
         mutable double yscale;
         mutable double min_x;
         mutable double min_y;
+        /// count 
+        // static double cphi = 0.0;
         double sign_phi;
 
     private:
@@ -774,7 +1186,7 @@ namespace Algoim
         /// Vector of boundary normal vectors
         vector<TinyVector<double, N>> norm;
         /// curvature at every point
-        vector<TinyVector<double, N-1>> kappa;
+        vector<TinyVector<double, N - 1>> kappa;
         /// penalty parameter
         double rho;
         /// sign of ls

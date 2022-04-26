@@ -2,8 +2,9 @@
 #include "algoim_levelset.hpp"
 #include <iostream>
 #include <iomanip> // std::setprecision()
-bool ellipse = true;
+bool ellipse = false;
 bool circle = false;
+bool airfoil = true;
 #include <chrono>
 using namespace std::chrono;
 /// this function constructs the normal vectors for given boundary points of level-set geometry
@@ -20,15 +21,15 @@ std::vector<TinyVector<double, N>> constructNormal(std::vector<TinyVector<double
         {
             if (i == 0)
             {
-                dX.push_back(0.5 * (Xc.at(i + 1)(j) - Xc.at(nbnd - 1)(j)));
+                dX.push_back(Xc.at(i + 1)(j) - Xc.at(i)(j));
             }
             else if (i == nbnd - 1)
             {
-                dX.push_back(0.5 * (Xc.at(0)(j) - Xc.at(i - 1)(j)));
+                dX.push_back(Xc.at(i)(j) - Xc.at(i - 1)(j));
             }
             else
             {
-                dX.push_back(0.5 * (Xc.at(i + 1)(j) - Xc.at(i - 1))(j));
+                dX.push_back(0.5 * (Xc.at(i + 1)(j) - Xc.at(i - 1)(j)));
             }
         }
         double nx = dX.at(1);
@@ -36,10 +37,58 @@ std::vector<TinyVector<double, N>> constructNormal(std::vector<TinyVector<double
         double ds = 1.0 / sqrt((nx * nx) + (ny * ny));
         nsurf(0) = nx * ds;
         nsurf(1) = ny * ds;
+        if (i==nbnd-1)
+        {
+           nsurf(0) = 1.0;
+           nsurf(1) = 0; 
+        }
         nor.push_back(nsurf);
     }
     return nor;
 }
+/// this function constructs the curvature at given boundary points of level-set geometry
+template <int N>
+std::vector<TinyVector<double, N - 1>> getCurvature(std::vector<TinyVector<double, N>> Xc)
+{
+    std::vector<TinyVector<double, N - 1>> kappa;
+    int nbnd = Xc.size();
+    double a0 = 0.2969;
+    double a1 = -0.126;
+    double a2 = -0.3516;
+    double a3 = 0.2843;
+    double a4 = -0.1015; // -0.1036 for closed te
+    double tc = 0.12;
+    double theta = 0.0;
+    // thickness
+    for (int i = 0; i < nbnd; i++)
+    {
+        double xc = Xc.at(i)(0);
+        double yt = tc * ((a0 * sqrt(xc)) + (a1 * xc) + (a2 * (pow(xc, 2))) + (a3 * (pow(xc, 3))) + (a4 * (pow(xc, 4)))) / (0.2);
+        double dytdx = tc * ((0.5 * a0 / sqrt(xc)) + a1 + (2.0 * a2 * xc) + (3.0 * a3 * pow(xc, 2)) + (4.0 * a4 * pow(xc, 3))) / (0.2);
+        double d2ytdx = tc * ((-0.25 * a0 / pow(xc, 1.5)) + (2.0 * a2) + (6.0 * a3 * xc) + (12.0 * a4 * pow(xc, 2))) / 0.2;
+        double ysu = yt * cos(theta);
+        double dydx = dytdx * cos(theta);
+        double d2ydx = d2ytdx * cos(theta);
+        double roc = (pow((1 + (dydx * dydx)), 1.5)) / abs(d2ydx);
+        if (xc == 0.0)
+        {
+            double rle = 0.5 * pow(a0 * tc / 0.20, 2);
+            kappa.push_back(1.0/rle);
+        }
+        else if (i==0 || i==nbnd-1)
+        {
+            kappa.push_back(0.0);
+        }
+        else
+        {
+            kappa.push_back(1.0/roc);
+        }
+        
+        //kappa.push_back(0.0);
+    }
+    return kappa;
+}
+
 template <int N>
 struct Ellipsoid
 {
@@ -107,7 +156,168 @@ int main(int argc, char *argv[])
 #endif
 
     double delta = 1e-10;
+    if (airfoil)
+    {
+        std::cout << setprecision(20) << endl;
+        int nel[9] = {8, 16, 32, 64, 128, 256, 512, 1024, 2048};
+        int qo1 = 1;
+        const int count = 1;
+        double exact_area = 0.0817073;
+        for (int q0 = 0; q0 < count; ++q0)
+        {
+            const char *geometry_file = "geometry_data/NACA_0012_200.dat";
+            ifstream file;
+            file.open(geometry_file);
+            std::vector<TinyVector<double, N>> Xc;
+            std::vector<TinyVector<double, N>> nor;
+            std::vector<TinyVector<double, N - 1>> kappa;
+            /// read the boundary coordinates from user-provided file
+            while (1)
+            {
+                if (file.eof())
+                    break;
+                TinyVector<double, N> x;
+                for (int j = 0; j < N; ++j)
+                {
+                    file >> x(j);
+                }
+                Xc.push_back(x);
+            }
+            file.close();
+            /// get the number of boundary points
+            int nbnd = Xc.size();
+            cout << "nbnd " << nbnd << endl;
+            /// parameters
+            double rho = 10 * nbnd;
+            cout << "rho " << rho << endl;
+            /// construct the normal vector for all boundary points
+            nor = constructNormal<N>(Xc);
+            kappa = getCurvature<N>(Xc);
+            // cout << "normal is: " << endl;
+            // for (int k = 0; k < nbnd; ++k)
+            // {
+            //     cout << nor.at(k) << endl;
+            // }
+            /// grid size
+            int n = nel[1];
+            /// translate airfoil
+            TinyVector<double, N> xcent;
+            xcent(0) = 19.5;
+            xcent(1) = 20.0;
+            std::vector<TinyVector<double, N>> Xcoord;
+            for (int k = 0; k < nbnd; ++k)
+            {
+                TinyVector<double, N> xs;
+                for (int d = 0; d < N; ++d)
+                {
+                    xs(d) = Xc.at(k)(d) + xcent(d);
+                }
+                Xcoord.push_back(xs);
+            }
+            /// evaluate levelset and it's gradient
+            Algoim::LevelSet<N> phi;
+            phi.initializeLevelSet(Xcoord, nor, kappa, rho, 1.0, delta);
+            TinyVector<double, N> x;
+            x(0) = 19.5;
+            x(1) = 20.0;
+            cout << "phi " << phi(x) << endl;
+            cout << "grad phi " << phi.grad(x) << endl;
+            cout << "hessian phi " << phi.hessian(x) << endl;
+            cout << " ------------------------------------------- " << endl;
+            cout << "qo " << qo1 << endl;
+            QuadratureRule<N> qarea, qperi, qarea_auto;
+            
+            /// Area of a 2D airfoil, computed via the cells of a Cartesian grid
+            {
+                const char *surface_quad_file = "quad_points_peri_auto.dat";
+                ofstream file;
+                file.open(surface_quad_file);
+                auto area_start = high_resolution_clock::now();
+                std::cout << "Area and Perimeter of a 2D airfoil, computed via the cells of a " << n << " by " << n << " Cartesian grid:\n";
+                double dx = 1.2 / n;
+                double dy = 0.2 / n;
+                double min_x = 19.4;
+                double min_y = 19.9;
+                double area = 0.0;
+                double peri = 0.0;
+                for (int i = 0; i < n; ++i)
+                    for (int j = 0; j < n; ++j)
+                    {
+                        blitz::TinyVector<double, 2> xmin = {min_x + i * dx, min_y + j * dy};
+                        blitz::TinyVector<double, 2> xmax = {min_x + i * dx + dx, min_y + j * dy + dy};
+                        auto q = Algoim::quadGen<2>(phi, Algoim::BoundingBox<double, 2>(xmin, xmax), -1, -1, qo1);
+                        area += q([](TinyVector<double, 2> x)
+                                  { return 1.0; });
+                        auto qp = Algoim::quadGen<2>(phi, Algoim::BoundingBox<double, 2>(xmin, xmax), 2, -1, qo1);
+                        peri += qp([](TinyVector<double, 2> x)
+                                   { return 1.0; });
+                        for (const auto &pt : q.nodes)
+                        {
+                            TinyVector<double, N> xp;
+                            xp[0] = pt.x[0];
+                            xp[1] = pt.x[1];
+                            qarea.evalIntegrand(xp, pt.w);
+                        }
+                        for (const auto &pt : qp.nodes)
+                        {
+                            TinyVector<double, N> xp;
+                            xp[0] = pt.x[0];
+                            xp[1] = pt.x[1];
+                            qperi.evalIntegrand(xp, pt.w);
+                        }
 
+                        for (const auto &pt : qp.nodes)
+                        {
+                            file << pt.x(0) << " " << pt.x(1) << " \n";
+                        }
+                    }
+                auto area_stop = high_resolution_clock::now();
+                auto area_duration = duration_cast<seconds>(area_stop - area_start);
+                std::cout << "  computed area = " << area << "\n";
+                double area_err = abs(area - exact_area);
+                std::cout << "  area error = " << area_err << "\n";
+                std::cout << "  computed perimeter = " << peri << "\n";
+                double peri_err = abs(peri - 2.03955);
+                std::cout << "  perimeter error = " << peri_err << "\n";
+                // member function on the duration object
+                cout << " ---- Time taken  ---- " << endl;
+                cout << "      " << area_duration.count() << "s " << endl;
+                cout << " ----------------------- " << endl;
+                file.close();
+                
+            }
+            {
+                double area;
+                cout << "area of an airfoil using automatic subdivision " << endl;
+                blitz::TinyVector<double, N> xupper;
+                blitz::TinyVector<double, N> xlower;
+                xlower = {1.9, 2.4};
+                xupper = {3.1, 2.6};
+                auto q = Algoim::quadGen<2>(phi, Algoim::BoundingBox<double, 2>(xlower, xupper), -1, -1, qo1);
+                area = q([](const TinyVector<double, 2> x)
+                                { return 1.0; });
+                for (const auto &pt : q.nodes)
+                {
+                    TinyVector<double, N> xp;
+                    xp[0] = pt.x[0];
+                    xp[1] = pt.x[1];
+                    qarea_auto.evalIntegrand(xp, pt.w);
+                }
+                double area_err = abs(area - exact_area);
+                std::cout << "  area error = " << area_err << "\n";
+                 cout << " ----------------------- " << endl;
+            }
+            std::cout << "int rule size automatic subdivision " << qarea_auto.nodes.size() << std::endl;
+            std::ofstream farea("quad_rule_area_quad_algoim_airfoil_rho_100_nel_32.vtp");
+            Algoim::outputQuadratureRuleAsVtpXML(qarea, farea);
+            std::cout << "  scheme.vtp file written, containing " << qarea.nodes.size()
+                      << " quadrature points\n";
+            std::ofstream fperi("quad_rule_peri_linear_algoim_airfoil.vtp");
+            Algoim::outputQuadratureRuleAsVtpXML(qperi, fperi);
+            std::cout << "  scheme.vtp file written, containing " << qperi.nodes.size()
+                      << " quadrature points\n";
+        } /// loop over grid size ends
+    }
     if (circle)
     {
         const char *area = "circle_area_p2.dat";
@@ -125,13 +335,13 @@ int main(int argc, char *argv[])
         file_peri_err << std::fixed << setprecision(20) << endl;
         std::vector<TinyVector<double, N>> Xc;
         std::vector<TinyVector<double, N>> nor;
-        std::vector<TinyVector<double, N-1>> kappa;
+        std::vector<TinyVector<double, N - 1>> kappa;
         int nel[5] = {8, 16, 32, 64, 128 /*,  32, 64, 128, 256, 512, 1024, 2048*/};
-        const int count = 5;
+        const int count = 4;
         for (int idx = 0; idx < count; ++idx)
         {
             int n = nel[idx];
-            int nbnd = n*n;
+            int nbnd = n * n;
             cout << "nbnd " << nbnd << endl;
             /// parameters
             double rho = nbnd;
@@ -153,6 +363,7 @@ int main(int argc, char *argv[])
                 ni = nrm / ds;
                 Xc.push_back(x);
                 nor.push_back(ni);
+                kappa.push_back(0.0);
             }
             /// evaluate levelset and it's gradient
             Algoim::LevelSet<N> phi;
@@ -242,6 +453,14 @@ int main(int argc, char *argv[])
                           << " quadrature points\n";
             }
         }
+        file_area << "\n";
+        file_area_err << "\n";
+        file_peri << "\n";
+        file_peri_err << "\n";
+        file_area.close();
+        file_area_err.close();
+        file_peri.close();
+        file_peri_err.close();
 
 #if 0
         //"Area of a 2D circle using automatic subdivision
@@ -316,32 +535,32 @@ int main(int argc, char *argv[])
 
     if (ellipse)
     {
-        const char *area = "ellipse_curv_area_p2_rule.dat";
-        const char *area_err = "ellipse_curv_area_err_p2_rule.dat";
-        const char *perimeter = "ellipse_curv_peri_p2_rule.dat";
-        const char *perimeter_err = "ellipse_curv_peri_err_p2_rule.dat";
+        const char *area = "ellipse_area_taylor_bnds.dat";
+        const char *area_err = "ellipse_area_err_taylor_bnds.dat";
+        // const char *perimeter = "ellipse_curv_bnds_peri_p2_rho_10nbnd.dat";
+        // const char *perimeter_err = "ellipse_curv_bnds_peri_err_p2_rho_10nbnd.dat";
         ofstream file_area, file_area_err, file_peri, file_peri_err;
         file_area.open(area, ios::app);
         file_area_err.open(area_err, ios::app);
-        file_peri.open(perimeter, ios::app);
-        file_peri_err.open(perimeter_err, ios::app);
+        // file_peri.open(perimeter, ios::app);
+        // file_peri_err.open(perimeter_err, ios::app);
         file_area << std::fixed << setprecision(20) << endl;
         file_area_err << std::fixed << setprecision(20) << endl;
-        file_peri << std::fixed << setprecision(20) << endl;
-        file_peri_err << std::fixed << setprecision(20) << endl;
+        // file_peri << std::fixed << setprecision(20) << endl;
+        // file_peri_err << std::fixed << setprecision(20) << endl;
         std::cout << setprecision(20) << endl;
-        int nel[7] = {32, 64, 128, 256, 512, 1024, 2048};
+        int nel[9] = {8, 16, 32, 64, 128, 256, 512, 1024, 2048};
         int qo1 = 1;
         const int count = 1;
         TinyVector<double, count> Avec;
         TinyVector<double, count> Pvec;
-        double exact_area = M_PI * 4.0 * 1.0;
+
         for (int q0 = 0; q0 < count; ++q0)
         {
             /// grid size
-            int n = 8;
-            /// # boundary poiints
-            int nbnd = 16;
+            int n = nel[1];
+            /// # boundary points
+            int nbnd = 4*n;
             cout << "nbnd " << nbnd << endl;
             /// parameters
             double rho = 10*nbnd;
@@ -350,9 +569,10 @@ int main(int argc, char *argv[])
             double a = 4.0;
             /// minor axis
             double b = 1.0;
+            double exact_area = M_PI * a * b;
             std::vector<TinyVector<double, N>> Xc;
             std::vector<TinyVector<double, N>> nor;
-            std::vector<TinyVector<double, N-1>> kappa;
+            std::vector<TinyVector<double, N - 1>> kappa;
             for (int k = 0; k < nbnd; ++k)
             {
                 double theta = k * 2.0 * M_PI / nbnd;
@@ -376,16 +596,16 @@ int main(int argc, char *argv[])
                 double mag_dx = mag(dx);
                 double den = mag_dx * mag_dx * mag_dx;
                 TinyVector<double, N - 1> curv;
-                // curv(0) = num / den;
-                curv(0) = 0.0;
+                curv(0) = num / den;
                 kappa.push_back(curv);
+                //kappa.push_back(0.0);
             }
             /// evaluate levelset and it's gradient
             Algoim::LevelSet<N> phi;
             phi.initializeLevelSet(Xc, nor, kappa, rho, 1.0, delta);
             TinyVector<double, N> x;
-            x(0) = 2 ;
-            x(1) = 0.844;
+            x(0) = 0.5;
+            x(1) = 0.0;
             cout << "phi " << phi(x) << endl;
             cout << "grad phi " << phi.grad(x) << endl;
             cout << "hessian phi " << phi.hessian(x) << endl;
@@ -396,6 +616,10 @@ int main(int argc, char *argv[])
             {
                 auto area_start = high_resolution_clock::now();
                 std::cout << "Area and Perimeter of a 2D ellipse, computed via the cells of a " << n << " by " << n << " Cartesian grid:\n";
+                // double dx = 1.2 / n;
+                // double dy = 0.12 / n;
+                // double min_x = -0.6;
+                // double min_y = -0.06;
                 double dx = 8.2 / n;
                 double dy = 2.2 / n;
                 double min_x = -4.1;
@@ -405,11 +629,16 @@ int main(int argc, char *argv[])
                 for (int i = 0; i < n; ++i)
                     for (int j = 0; j < n; ++j)
                     {
-                        blitz::TinyVector<double, 2> xmin = {min_x + i * dx, min_y + j * dy};
-                        blitz::TinyVector<double, 2> xmax = {min_x + i * dx + dx, min_y + j * dy + dy};
-                        auto q = Algoim::quadGen<2>(phi, Algoim::BoundingBox<double, 2>(xmin, xmax), -1, -1, qo1);
-                        area += q([](TinyVector<double, 2> x)
-                                  { return 1.0; });
+                        // if (i == 0 && j == 0)
+                        // {
+                            blitz::TinyVector<double, 2> xmin = {min_x + i * dx, min_y + j * dy};
+                            blitz::TinyVector<double, 2> xmax = {min_x + i * dx + dx, min_y + j * dy + dy};
+                            //cout << "xmin: " << xmin << " xmax: " << xmax << endl;
+                            auto q = Algoim::quadGen<2>(phi, Algoim::BoundingBox<double, 2>(xmin, xmax), -1, -1, qo1);
+                            area += q([](TinyVector<double, 2> x)
+                                      { return 1.0; });
+                       // }
+
                         auto qp = Algoim::quadGen<2>(phi, Algoim::BoundingBox<double, 2>(xmin, xmax), 2, -1, qo1);
                         peri += qp([](TinyVector<double, 2> x)
                                    { return 1.0; });
@@ -434,22 +663,23 @@ int main(int argc, char *argv[])
                 double area_err = abs(area - exact_area);
                 std::cout << "  area error = " << area_err << "\n";
                 std::cout << "  computed perimeter = " << peri << "\n";
-                double peri_err = abs(peri - 17.17337179259470048);
-                std::cout << "  perimeter error = " << peri_err << "\n";
+                //double peri_err = abs(peri - 17.156843550313663);
+                // double peri_err = abs(peri - 2.032753568);
+                // std::cout << "  perimeter error = " << peri_err << "\n";
                 file_area << area << " ";
                 file_area_err << area_err << " ";
-                file_peri << peri << " ";
-                file_peri_err << peri_err << " ";
+                // file_peri << peri << " ";
+                // file_peri_err << peri_err << " ";
                 // member function on the duration object
                 cout << " ---- Time taken  ---- " << endl;
                 cout << "      " << area_duration.count() << "s " << endl;
                 cout << " ----------------------- " << endl;
             }
-            std::ofstream farea("quad_rule_area_linear_algoim.vtp");
+            std::ofstream farea("quad_rule_area_linear_algoim_quad_ellipse_rho_10_thick_curv_nbnd_nel_sq_lin.vtp");
             Algoim::outputQuadratureRuleAsVtpXML(qarea, farea);
             std::cout << "  scheme.vtp file written, containing " << qarea.nodes.size()
                       << " quadrature points\n";
-            std::ofstream fperi("quad_rule_peri__linear_algoim.vtp");
+            std::ofstream fperi("quad_rule_peri_algoim_ellipse_quad.vtp");
             Algoim::outputQuadratureRuleAsVtpXML(qperi, fperi);
             std::cout << "  scheme.vtp file written, containing " << qperi.nodes.size()
                       << " quadrature points\n";
@@ -457,12 +687,12 @@ int main(int argc, char *argv[])
         } /// loop over grid size ends
         file_area << "\n";
         file_area_err << "\n";
-        file_peri << "\n";
-        file_peri_err << "\n";
+        // file_peri << "\n";
+        // file_peri_err << "\n";
         file_area.close();
         file_area_err.close();
-        file_peri.close();
-        file_peri_err.close();
+        // file_peri.close();
+        // file_peri_err.close();
 
         //"Area of a 2D ellipse using automatic subdivision
         // {

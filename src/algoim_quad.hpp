@@ -14,6 +14,8 @@
 #include "algoim_interval.hpp"
 #include "algoim_boundingbox.hpp"
 #include "algoim_multiloop.hpp"
+#include <chrono>
+using namespace std::chrono;
 using namespace std;
 namespace Algoim
 {
@@ -415,11 +417,15 @@ namespace Algoim
 
             // Prune list of psi functions: if prune procedure returns false, then the domain of integration is empty.
             if (!prune())
+            {
+                //std::cout << "domain of integration is empty " << std::endl;
                 return;
-
+            }
+           
             // If all psi functions were pruned, then the volumetric integral domain is the entire hyperrectangle.
             if (psiCount == 0)
-            {
+            {   
+                //std::cout << "volumetric integral domain is the entire hyperrectangle " << std::endl;
                 if (!S)
                     tensorProductIntegral();
                 return;
@@ -459,6 +465,7 @@ namespace Algoim
                 TinyVector<Interval<N>,N> g = phi.grad(xint);
 
                 // Determine if derivative in e0 direction is bounded away from zero.
+                const auto t1_start = high_resolution_clock::now();
                 bool directionOkay = e0 != -1 && g(e0).uniformSign();
                 if (!directionOkay)
                 {
@@ -481,8 +488,10 @@ namespace Algoim
                         }
                         assert(ind >= 0);
                         Real xmid = xrange.midpoint(ind);
+                        //std::cout << "direction is not good, reached level: " << level << std::endl;
                         ImplicitIntegral<M,N,Phi,F,S>(phi, f, free, psi, psiCount, BoundingBox<Real,N>(xrange.min(), setComponent(xrange.max(), ind, xmid)), p, level + 1);
                         ImplicitIntegral<M,N,Phi,F,S>(phi, f, free, psi, psiCount, BoundingBox<Real,N>(setComponent(xrange.min(), ind, xmid), xrange.max()), p, level + 1);
+                        //std::cout << "direction is not good at level: " << level << " again called ImplicitIntegral " << std::endl;
                         return;
                     }
                     else
@@ -509,10 +518,13 @@ namespace Algoim
                             else
                                 f.evalIntegrand(xpoint, measure);
                         }
+                        //cout << "evaluating level set functions at the centre of box " << endl;
                         return;
                     }
                 }
-                
+                const auto t1_stop = high_resolution_clock::now();
+                const auto t1_duration = duration_cast<seconds>(t1_stop - t1_start);
+                //std::cout << "time taken to find if derivative in e0 direction is bounded away from zero " << t1_duration.count() <<  " s " << std::endl;
                 // Direction is okay - build restricted level set functions and determine the appropriate signs
                 int bottomSign, topSign;
                 detail::determineSigns<S>(g(e0).alpha > 0.0, psi[i].sign(), bottomSign, topSign);
@@ -520,7 +532,6 @@ namespace Algoim
                 newPsi[newPsiCount++] = PsiCode<N>(psi[i], e0, 1, topSign);
                 assert(newPsiCount <= 1 << (N - 1));
             }
-
             // Dimension reduction call
             assert(e0 != -1);
             ImplicitIntegral<M-1,N,Phi,ImplicitIntegral<M,N,Phi,F,S>,false>(phi, *this, setComponent(free, e0, false), newPsi, newPsiCount, xrange, p);
@@ -652,6 +663,7 @@ namespace Algoim
     template<int N, typename F>
     QuadratureRule<N> quadGen(const F& phi, const BoundingBox<Real,N>& xrange, int dim, int side, int qo)
     {
+        const auto t1_start = high_resolution_clock::now();
         QuadratureRule<N> q;
         std::array<PsiCode<N>,1 << (N - 1)> psi;
         TinyVector<bool,N> free = true;
@@ -680,6 +692,9 @@ namespace Algoim
             psi[0] = PsiCode<N>(0, -1);
             ImplicitIntegral<N,N,F,QuadratureRule<N>,false>(phi, q, free, psi, 1, xrange, qo);
         }
+        const auto t1_stop = high_resolution_clock::now();
+        const auto t1_duration = duration_cast<seconds>(t1_stop - t1_start);
+       // cout << "time taken inside quadGen " << t1_duration.count() << " s" << endl;
         return q;
     }
 } // namespace Algoim
