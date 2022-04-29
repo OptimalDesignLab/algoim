@@ -308,11 +308,11 @@ int main(int argc, char *argv[])
                  cout << " ----------------------- " << endl;
             }
             std::cout << "int rule size automatic subdivision " << qarea_auto.nodes.size() << std::endl;
-            std::ofstream farea("quad_rule_area_quad_algoim_airfoil_rho_100_nel_32.vtp");
+            std::ofstream farea("airfoil_area_rho_10_nel_16.vtp");
             Algoim::outputQuadratureRuleAsVtpXML(qarea, farea);
             std::cout << "  scheme.vtp file written, containing " << qarea.nodes.size()
                       << " quadrature points\n";
-            std::ofstream fperi("quad_rule_peri_linear_algoim_airfoil.vtp");
+            std::ofstream fperi("airfoil_peri_rho_10_nel_16.vtp");
             Algoim::outputQuadratureRuleAsVtpXML(qperi, fperi);
             std::cout << "  scheme.vtp file written, containing " << qperi.nodes.size()
                       << " quadrature points\n";
