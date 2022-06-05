@@ -37,11 +37,11 @@ std::vector<TinyVector<double, N>> constructNormal(std::vector<TinyVector<double
         double ds = 1.0 / sqrt((nx * nx) + (ny * ny));
         nsurf(0) = nx * ds;
         nsurf(1) = ny * ds;
-        if (i==nbnd-1)
-        {
-           nsurf(0) = 1.0;
-           nsurf(1) = 0; 
-        }
+        // if (i==nbnd-1)
+        // {
+        //    nsurf(0) = 1.0;
+        //    nsurf(1) = 0; 
+        // }
         nor.push_back(nsurf);
     }
     return nor;
@@ -165,7 +165,8 @@ int main(int argc, char *argv[])
         double exact_area = 0.0817073;
         for (int q0 = 0; q0 < count; ++q0)
         {
-            const char *geometry_file = "geometry_data/NACA_0012_200.dat";
+           // const char *geometry_file = "geometry_data/NACA_0012_200.dat";
+            const char *geometry_file = "geometry_data/NACA_0012_nbnd-53.dat";
             ifstream file;
             file.open(geometry_file);
             std::vector<TinyVector<double, N>> Xc;
@@ -199,7 +200,7 @@ int main(int argc, char *argv[])
             //     cout << nor.at(k) << endl;
             // }
             /// grid size
-            int n = nel[1];
+            int n = nel[2];
             /// translate airfoil
             TinyVector<double, N> xcent;
             xcent(0) = 19.5;
@@ -234,9 +235,9 @@ int main(int argc, char *argv[])
                 file.open(surface_quad_file);
                 auto area_start = high_resolution_clock::now();
                 std::cout << "Area and Perimeter of a 2D airfoil, computed via the cells of a " << n << " by " << n << " Cartesian grid:\n";
-                double dx = 1.2 / n;
+                double dx = 1.1 / n;
                 double dy = 0.2 / n;
-                double min_x = 19.4;
+                double min_x = 19.45;
                 double min_y = 19.9;
                 double area = 0.0;
                 double peri = 0.0;
@@ -308,11 +309,11 @@ int main(int argc, char *argv[])
                  cout << " ----------------------- " << endl;
             }
             std::cout << "int rule size automatic subdivision " << qarea_auto.nodes.size() << std::endl;
-            std::ofstream farea("airfoil_area_rho_10_nel_16.vtp");
+            std::ofstream farea("airfoil_area_rho_10_nel_32.vtp");
             Algoim::outputQuadratureRuleAsVtpXML(qarea, farea);
             std::cout << "  scheme.vtp file written, containing " << qarea.nodes.size()
                       << " quadrature points\n";
-            std::ofstream fperi("airfoil_peri_rho_10_nel_16.vtp");
+            std::ofstream fperi("airfoil_peri_rho_10_nel_32.vtp");
             Algoim::outputQuadratureRuleAsVtpXML(qperi, fperi);
             std::cout << "  scheme.vtp file written, containing " << qperi.nodes.size()
                       << " quadrature points\n";
@@ -558,7 +559,7 @@ int main(int argc, char *argv[])
         for (int q0 = 0; q0 < count; ++q0)
         {
             /// grid size
-            int n = nel[1];
+            int n = nel[2];
             /// # boundary points
             int nbnd = 4*n;
             cout << "nbnd " << nbnd << endl;
@@ -597,8 +598,8 @@ int main(int argc, char *argv[])
                 double den = mag_dx * mag_dx * mag_dx;
                 TinyVector<double, N - 1> curv;
                 curv(0) = num / den;
-                kappa.push_back(curv);
-                //kappa.push_back(0.0);
+                //kappa.push_back(curv);
+                kappa.push_back(0.0);
             }
             /// evaluate levelset and it's gradient
             Algoim::LevelSet<N> phi;
@@ -663,9 +664,9 @@ int main(int argc, char *argv[])
                 double area_err = abs(area - exact_area);
                 std::cout << "  area error = " << area_err << "\n";
                 std::cout << "  computed perimeter = " << peri << "\n";
-                //double peri_err = abs(peri - 17.156843550313663);
+                double peri_err = abs(peri - 17.156843550313663);
                 // double peri_err = abs(peri - 2.032753568);
-                // std::cout << "  perimeter error = " << peri_err << "\n";
+                std::cout << "  perimeter error = " << peri_err << "\n";
                 file_area << area << " ";
                 file_area_err << area_err << " ";
                 // file_peri << peri << " ";
