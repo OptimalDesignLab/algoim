@@ -33,8 +33,8 @@ namespace algoim
 {
     namespace detail
     {
-        template<int N>
-        booluarray<N,ALGOIM_M> mask_driver(const xarray<real,N>& f, const booluarray<N,ALGOIM_M>& fmask, const xarray<real,N>* g, const booluarray<N,ALGOIM_M>* gmask)
+        template<typename xdouble,int N>
+        booluarray<N,ALGOIM_M> mask_driver(const xarray<xdouble,N>& f, const booluarray<N,ALGOIM_M>& fmask, const xarray<xdouble,N>* g, const booluarray<N,ALGOIM_M>* gmask)
         {
             booluarray<N,ALGOIM_M> mask(false);
             auto helper = [&](auto&& self, uvector<int,N> a, uvector<int,N> b)
@@ -56,17 +56,17 @@ namespace algoim
 
                 if (g)
                 {
-                    xarray<real,N> fab(nullptr, f.ext()), gab(nullptr, g->ext());
-                    algoim_spark_alloc(real, fab, gab);
-                    bernstein::deCasteljau(f, xa, xb, fab);
-                    bernstein::deCasteljau(*g, xa, xb, gab);
+                    xarray<xdouble, N> fab(nullptr, f.ext()), gab(nullptr, g->ext());
+                    algoim_spark_alloc(xdouble, fab, gab);
+                    bernstein::deCasteljau<xdouble, N>(f, xa, xb, fab);
+                    bernstein::deCasteljau<xdouble, N>(*g, xa, xb, gab);
                     if (bernstein::orthantTest(fab, gab))
                         return;
                 }
                 else
                 {
-                    xarray<real,N> fab(nullptr, f.ext());
-                    algoim_spark_alloc(real, fab);
+                    xarray<xdouble, N> fab(nullptr, f.ext());
+                    algoim_spark_alloc(xdouble, fab);
                     bernstein::deCasteljau(f, xa, xb, fab);
                     if (bernstein::uniformSign(fab) != 0)
                         return;
@@ -104,10 +104,10 @@ namespace algoim
         // level set; if the mask is false somewhere, then it is guaranteed that f was originally
         // masked off at the same place, or that it definitively does not have any zeros in that
         // subrectangle; if the returned mask is true, then shared zeros may exist (and with high likelihood)
-        template<int N>
-        booluarray<N,ALGOIM_M> nonzeroMask(const xarray<real,N>& f, const booluarray<N,ALGOIM_M>& fmask)
+        template<typename xdouble, int N>
+        booluarray<N,ALGOIM_M> nonzeroMask(const xarray<xdouble,N>& f, const booluarray<N,ALGOIM_M>& fmask)
         {
-            return mask_driver<N>(f, fmask, nullptr, nullptr);
+            return mask_driver<xdouble, N>(f, fmask, nullptr, nullptr);
         }
 
         // Collapse a mask along dimension k by bitwise-OR-ing along columns
@@ -487,61 +487,62 @@ namespace algoim
     //               multi-valued height function devoid of vertical tangents/branching.
     enum QuadStrategy { AlwaysGL, AlwaysTS, AutoMixed };
 
-    template<int N>
+    template<typename xdouble, int N>
     struct ImplicitPolyQuadrature
     {
         enum IntegralType { Inner, OuterSingle, OuterAggregate };
 
         PolySet<N,ALGOIM_M> phi;                                                // Given N-dimensional polynomials
         int k;                                                                  // Elimination axis/height direction; k = N if there are no interfaces
-        ImplicitPolyQuadrature<N-1> base;                                       // Base polynomials corresponding to removal of axis k
+        ImplicitPolyQuadrature<xdouble, N-1> base;                                       // Base polynomials corresponding to removal of axis k
         bool auto_apply_TS;                                                     // If quad method is auto chosen, indicates whether TS is applied
         IntegralType type;                                                      // Whether an inner integral, or outer of two kinds
-        std::array<std::tuple<int,ImplicitPolyQuadrature<N-1>>,N-1> base_other; // Stores other base cases, besides k, when in aggregate mode
+        std::array<std::tuple<int,ImplicitPolyQuadrature<xdouble, N-1>>,N-1> base_other; // Stores other base cases, besides k, when in aggregate mode
 
         // Default ctor sets to an uninitialised state
         ImplicitPolyQuadrature() : k(-1) {}
 
         // Build quadrature hierarchy for a domain implicitly defined by a single polynomial
-        ImplicitPolyQuadrature(const xarray<real,N>& p)
+        ImplicitPolyQuadrature(const xarray<xdouble, N>& p)
         {
+            std::cout << "Inside  ImplicitPolyQuadrature () " << std::endl;
             auto mask = detail::nonzeroMask(p, booluarray<N,ALGOIM_M>(true));
-            if (!detail::maskEmpty(mask))
-                phi.push_back(p, mask);
-            build(true, false);
+            // if (!detail::maskEmpty(mask))
+            //     phi.push_back(p, mask);
+            // build(true, false);
         }
 
         // Build quadrature hierarchy for a domain implicitly defined by two polynomials
-        ImplicitPolyQuadrature(const xarray<real,N>& p, const xarray<real,N>& q)
-        {
-            {
-                auto mask = detail::nonzeroMask(p, booluarray<N,ALGOIM_M>(true));
-                if (!detail::maskEmpty(mask))
-                    phi.push_back(p, mask);
-            }
-            {
-                auto mask = detail::nonzeroMask(q, booluarray<N,ALGOIM_M>(true));
-                if (!detail::maskEmpty(mask))
-                    phi.push_back(q, mask);
-            }
-            build(true, false);
-        }
+        // ImplicitPolyQuadrature(const xarray<real,N>& p, const xarray<real,N>& q)
+        // {
+        //     {
+        //         auto mask = detail::nonzeroMask(p, booluarray<N,ALGOIM_M>(true));
+        //         if (!detail::maskEmpty(mask))
+        //             phi.push_back(p, mask);
+        //     }
+        //     {
+        //         auto mask = detail::nonzeroMask(q, booluarray<N,ALGOIM_M>(true));
+        //         if (!detail::maskEmpty(mask))
+        //             phi.push_back(q, mask);
+        //     }
+        //     build(true, false);
+        // }
 
         // Build quadrature hierarchy for a given domain implicitly defined by two polynomials with user-defined masks
-        ImplicitPolyQuadrature(const xarray<real,N>& p, const booluarray<N,ALGOIM_M>& pmask, const xarray<real,N>& q, const booluarray<N,ALGOIM_M>& qmask)
-        {
-            {
-                auto mask = detail::nonzeroMask(p, pmask);
-                if (!maskEmpty(mask))
-                    phi.push_back(p, mask);
-            }
-            {
-                auto mask = detail::nonzeroMask(q, qmask);
-                if (!maskEmpty(mask))
-                    phi.push_back(q, mask);
-            }
-            build(true, false);
-        }
+        // ImplicitPolyQuadrature(const xarray<real,N>& p, const booluarray<N,ALGOIM_M>& pmask, const xarray<real,N>& q, const booluarray<N,ALGOIM_M>& qmask)
+        // {
+        //     {
+        //         auto mask = detail::nonzeroMask(p, pmask);
+        //         if (!maskEmpty(mask))
+        //             phi.push_back(p, mask);
+        //     }
+        //     {
+        //         auto mask = detail::nonzeroMask(q, qmask);
+        //         if (!maskEmpty(mask))
+        //             phi.push_back(q, mask);
+        //     }
+        //     build(true, false);
+        // }
 
         // Assuming phi has been instantiated, determine elimination axis and build base
         void build(bool outer, bool auto_apply_TS)
@@ -802,7 +803,8 @@ namespace algoim
         }
     };
 
-    template<> struct ImplicitPolyQuadrature<0> {};
+    template<> struct ImplicitPolyQuadrature<double, 0> {};
+    template<> struct ImplicitPolyQuadrature<adouble, 0> {};
 } // namespace algoim
 
 #endif

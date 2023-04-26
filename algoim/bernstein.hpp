@@ -233,8 +233,8 @@ namespace algoim::bernstein
     // Applying a simple examination of coefficient signs, returns +1 if the
     // polynomial is uniformly positive, -1 if the polynomial is uniformly
     // negative, or 0 if no guarantees can be made
-    template<int N>
-    int uniformSign(const xarray<real,N>& beta) 
+    template<typename xdouble, int N>
+    int uniformSign(const xarray<xdouble,N>& beta) 
     {
         int s = util::sign(beta[0]);
         for (int i = 1; i < beta.size(); ++i)
@@ -289,8 +289,8 @@ namespace algoim::bernstein
     }
 
     // Apply de Casteljau algorithm to compute the Bernstein coefficients of alpha relative to the interval [0,tau]
-    template<int N>
-    void deCasteljauLeft(xarray<real,N>& alpha, real tau)
+    template<typename xdouble, int N>
+    void deCasteljauLeft(xarray<xdouble, N>& alpha, real tau)
     {
         int P = alpha.ext(0);
         for (int i = 1; i < P; ++i)
@@ -302,8 +302,8 @@ namespace algoim::bernstein
     }
 
     // Apply de Casteljau algorithm to compute the Bernstein coefficients of alpha relative to the interval [tau,1]
-    template<int N>
-    void deCasteljauRight(xarray<real,N>& alpha, real tau)
+    template<typename xdouble, int N>
+    void deCasteljauRight(xarray<xdouble,N>& alpha, real tau)
     {
         int P = alpha.ext(0);
         for (int i = 1; i < P; ++i)
@@ -318,8 +318,8 @@ namespace algoim::bernstein
     // to the hyperrectangle [a,b]. It is assumed that the given arrays a & b each have
     // length at least N. If, for a particular dimension, a[dim] > b[dim], both the interval
     // and coefficients are reversed.
-    template<int N, bool B = false>
-    void deCasteljau(xarray<real,N>& alpha, const real* a, const real* b)
+    template<typename xdouble, int N, bool B = false>
+    void deCasteljau(xarray<xdouble,N>& alpha, const real* a, const real* b)
     {
         using std::swap;
         using std::abs;
@@ -328,7 +328,7 @@ namespace algoim::bernstein
             int P = alpha.ext(0);
             if (*b < *a)
             {
-                deCasteljau<N,B>(alpha, b, a);
+                deCasteljau<xdouble, N,B>(alpha, b, a);
                 for (int i = 0; i < P / 2; ++i)
                     swap(alpha.a(i), alpha.a(P - 1 - i));
                 return;
@@ -346,7 +346,7 @@ namespace algoim::bernstein
         }
         else
         {
-            deCasteljau<2,true>(alpha.flatten().ref(), a, b);
+            deCasteljau<xdouble, 2,true>(alpha.flatten().ref(), a, b);
             for (int i = 0; i < alpha.ext(0); ++i)
                 deCasteljau(alpha.slice(i).ref(), a + 1, b + 1);
         }
@@ -355,17 +355,17 @@ namespace algoim::bernstein
     // Apply de Casteljau algorithm to compute the Bernstein coefficients of alpha relative
     // to the hyperrectangle [a,b]. If, for a particular dimension, a[dim] > b[dim], both the
     // interval and coefficients are reversed.
-    template<int N>
-    void deCasteljau(const xarray<real,N>& alpha, const uvector<real,N>& a, const uvector<real,N>& b, xarray<real,N>& out)
+    template<typename xdouble, int N>
+    void deCasteljau(const xarray<xdouble,N>& alpha, const uvector<real,N>& a, const uvector<real,N>& b, xarray<xdouble,N>& out)
     {
         assert(all(out.ext() == alpha.ext()));
         out = alpha;
-        deCasteljau(out, a.data(), b.data());
+        deCasteljau<xdouble, N, false>(out, a.data(), b.data());
     }
 
     // Elevate the degree of a Bernstein polynomial
-    template<int N, bool B = false>
-    void bernsteinElevate(const xarray<real,N>& alpha, xarray<real,N>& beta)
+    template<typename xdouble, int N, bool B = false>
+    void bernsteinElevate(const xarray<xdouble,N>& alpha, xarray<xdouble,N>& beta)
     {
         assert(all(beta.ext() >= alpha.ext()));
         if constexpr (N == 1 || B)
@@ -404,9 +404,9 @@ namespace algoim::bernstein
         }
         else
         {
-            xarray<real,N> gamma(nullptr, set_component(alpha.ext(), 0, beta.ext(0)));
-            algoim_spark_alloc(real, gamma);
-            bernsteinElevate<2,true>(alpha.flatten(), gamma.flatten().ref());
+            xarray<xdouble,N> gamma(nullptr, set_component(alpha.ext(), 0, beta.ext(0)));
+            algoim_spark_alloc(xdouble, gamma);
+            bernsteinElevate<xdouble, 2,true>(alpha.flatten(), gamma.flatten().ref());
             for (int i = 0; i < beta.ext(0); ++i)
                 bernsteinElevate(gamma.slice(i), beta.slice(i).ref());
         }
@@ -521,8 +521,8 @@ namespace algoim::bernstein
 
     // Determine if there is a scalar alpha such that sign x(i) + alpha y(i) > 0 for every component i;
     // if sign = 0, then returns true if it holds for sign = 1 and/or sign = -1
-    template<int N>
-    bool orthantTestBase(const xarray<real,N>& x, const xarray<real,N>& y, int sign = 0)
+    template<typename xdouble, int N>
+    bool orthantTestBase(const xarray<xdouble,N>& x, const xarray<xdouble,N>& y, int sign = 0)
     {
         assert(sign == 0 || sign == -1 || sign == 1);
         assert(all(x.ext() == y.ext()));
@@ -536,12 +536,12 @@ namespace algoim::bernstein
         real alphaMin = -std::numeric_limits<real>::infinity();
         for (int i = 0; i < x.size(); ++i)
         {
-            if (y[i] == 0.0 && x[i] * sign <= 0.0)
+            if (y[i] == 0.0 && (x[i] * sign) <= 0.0)
                 return false;
             if (y[i] > 0.0)
-                alphaMin = max(alphaMin, -x[i] / y[i] * sign);
+                alphaMin = max(alphaMin, value(-x[i] / y[i]) * sign);
             else if (y[i] < 0.0)
-                alphaMax = min(alphaMax, -x[i] / y[i] * sign);
+                alphaMax = min(alphaMax, value(-x[i] / y[i]) * sign);  /// using adept values 
         }
         if (isinf(alphaMin) || isinf(alphaMax))
             return true;
@@ -553,16 +553,16 @@ namespace algoim::bernstein
     // Determine if there are scalars alpha and beta such that {alpha f + beta g > 0} holds for every
     // Bernstein coefficient of f and g: if one of the polynomials has a smaller degree than the other,
     // it is degree elevated so that the two polynomials have the same degree
-    template<int N>
-    bool orthantTest(const xarray<real,N>& f, const xarray<real,N>& g)
+    template<typename xdouble, int N>
+    bool orthantTest(const xarray<xdouble,N>& f, const xarray<xdouble,N>& g)
     {
         if (all(f.ext() == g.ext()))
             return orthantTestBase(f, g);
         else
         {
             uvector<int,N> ext = max(f.ext(), g.ext());
-            xarray<real,N> fe(nullptr, ext), ge(nullptr, ext);
-            algoim_spark_alloc(real, fe, ge);
+            xarray<xdouble,N> fe(nullptr, ext), ge(nullptr, ext);
+            algoim_spark_alloc(xdouble, fe, ge);
             bernsteinElevate(f, fe);
             bernsteinElevate(g, ge);
             return orthantTestBase(fe, ge);
@@ -618,18 +618,18 @@ namespace algoim::bernstein
     };
 
     // Interpolate tensor-product data f, assumed to be nodal values at the same nodes returned by modifiedChebyshevNode()
-    template<int N, bool B = false>
-    void bernsteinInterpolate(const xarray<real,N>& f, real tol, xarray<real,N>& out)
+    template<typename xdouble, int N, bool B = false>
+    void bernsteinInterpolate(const xarray<xdouble,N>& f, real tol, xarray<xdouble,N>& out)
     {
+        std::cout << "Inside bernsteinInterpolate2: " << std::endl;
         assert(all(out.ext() == f.ext()));
         if constexpr (N == 1 || B)
         {
             int P = f.ext(0);
             int O = prod(f.ext(), 0);
             assert(P >= 1 && O >= 1);
-
-            real *tmp;
-            algoim_spark_alloc(real, &tmp, P * O);
+            xdouble *tmp;
+            algoim_spark_alloc(xdouble, &tmp, P * O);
 
             auto svd = BernsteinVandermondeSVD::get(P);
 
@@ -656,20 +656,22 @@ namespace algoim::bernstein
         }
         else
         {
-            xarray<real,N> gamma(nullptr, f.ext());
-            algoim_spark_alloc(real, gamma);        
-            bernsteinInterpolate<2,true>(f.flatten(), tol, gamma.flatten().ref());
+            xarray<xdouble,N> gamma(nullptr, f.ext());
+            algoim_spark_alloc(xdouble, gamma);        
+            bernsteinInterpolate<xdouble, 2,true>(f.flatten(), tol, gamma.flatten().ref());
             for (int i = 0; i < f.ext(0); ++i)
                 bernsteinInterpolate(gamma.slice(i), tol, out.slice(i).ref());
         }
     }
 
     // Interpolate a functional through its nodal evaluation at the modifiedChebyshevNode() points
-    template<int N, typename F>
-    void bernsteinInterpolate(F&& f, xarray<real,N>& out)
+    template<typename xdouble, int N, typename F>
+    void bernsteinInterpolate(F&& f, xarray<xdouble,N>& out)
     {
-        xarray<real,N> ff(nullptr, out.ext());
-        algoim_spark_alloc(real, ff);
+        std::cout << "Inside bernsteinInterpolate: " << std::endl;
+        using namespace std;
+        xarray<xdouble,N> ff(nullptr, out.ext());
+        algoim_spark_alloc(xdouble, ff);
         for (auto i = ff.loop(); ~i; ++i)
         {
             uvector<real,N> x;
