@@ -7,7 +7,7 @@
 
 #include <vector>
 #include "uvector.hpp"
-
+#include "adept.h"
 namespace algoim
 {
     template<typename T, int N>
@@ -24,28 +24,45 @@ namespace algoim
         {
             if (pos() + len > capacity)
             {
-                std::cout << "line 27: " << std::endl;
+                std::cout << "Inside sparstack line 27: " << std::endl;
                 std::cerr << "SparkStack<T = " << typeid(T).name() << ">: capacity=" << capacity << " and pos=" << pos() << " insufficient for request len=" << len << '\n';
                 std::cerr << "    consider increasing const 'capacity', defined on line " << capacity_line << " in file " << __FILE__ << '\n';
                 throw std::bad_alloc();
             }
-           std::cout << "line 32: " << std::endl;
+           // std::cout << "Inside sparstack line 32: " << std::endl;
             *ptr = base() + pos();
-            std::cout << "line 34: " << std::endl;
+            //std::cout << "Inside sparstack line 34: " << std::endl;
             pos() += len;
-            std::cout << "line 35: " << std::endl;
+           // std::cout << "Inside sparstack line 36: " << std::endl;
             if constexpr (sizeof...(rest) == 0)
+            {
+                // std::cout << "Inside sparstack line 39: " << std::endl;
+                // std::cout << "len " << len << std::endl;
                 return len;
+            }  
             else
                 return len + alloc(rest...);
         }
 
         static T* base()
         {
-            std::cout << "line 45: " << std::endl;
-            static thread_local std::vector<T> buff(capacity);
-            std::cout << "line 47: " << std::endl;
-            return buff.data();
+            // if constexpr (std::is_same_v<double, T>)
+            // {
+                // std::cout << "T is double " << std::endl;
+                // std::cout << "Inside sparstack line 52: " << std::endl;
+                static thread_local std::vector<T> buff(capacity);
+                // std::cout << "Inside sparstack line 54: " << std::endl;
+                return buff.data();
+            // }
+            // else
+            // {
+            //     std::cout << "T is adouble " << std::endl;
+            //     //stack.new_recording();
+            //     std::cout << "Inside sparstack line 45: " << std::endl;
+            //     static thread_local std::vector<T> buff(capacity);
+            //     std::cout << "Inside sparstack line 47: " << std::endl;
+            //     return buff.data();
+            // }
         }
 
         static ptrdiff_t& pos()
@@ -67,7 +84,7 @@ namespace algoim
         template<typename ...R>
         explicit SparkStack(T** ptr, size_t len, R&&... rest)
         {
-            std::cout << "line 64: " << std::endl;
+            //std::cout << "Inside sparstack line 70: " << std::endl;
             len_ = alloc(ptr, len, rest...);
         }
 
@@ -76,7 +93,7 @@ namespace algoim
         template<typename ...R>
         explicit SparkStack(T value, T** ptr, size_t len, R&&... rest)
         {
-             std::cout << "line 73: " << std::endl;
+            //std::cout << "Inside sparstack line 79: " << std::endl;
             T* start = base() + pos();
             len_ = alloc(ptr, len, rest...);
             for (int i = 0; i < len_; ++i)
@@ -87,7 +104,7 @@ namespace algoim
         template<int N>
         explicit SparkStack(uvector<T*,N>& ptr, const uvector<int,N>& ext)
         {
-            std::cout << "line 84: " << std::endl;
+            //std::cout << "Inside sparstack line 90: " << std::endl;
             len_ = 0;
             for (int i = 0; i < N; ++i)
                 len_ += alloc(&ptr(i), ext(i));
@@ -97,7 +114,7 @@ namespace algoim
         template<int ...N>
         explicit SparkStack(xarray<T,N>&... a)
         {
-             std::cout << "line 94: " << std::endl;
+            //std::cout << "Inside sparstack line 100: " << std::endl;
             len_ = (alloc(&a.data_, a.size()) + ...);
         }
 

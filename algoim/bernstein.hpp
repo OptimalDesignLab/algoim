@@ -29,11 +29,11 @@ namespace algoim::bernstein
 {
     // Evaluate at x the P Bernstein basis functions of degree P-1
     //   out: array of length P
-    template<typename T>
-    void evalBernsteinBasis(const T& x, int P, T* out)
+    template <typename T>
+    void evalBernsteinBasis(const T &x, int P, T *out)
     {
         assert(P >= 1);
-        const real* binom = Binomial::row(P - 1);
+        const real *binom = Binomial::row(P - 1);
         T p = 1.0;
         for (int i = 0; i < P; ++i)
         {
@@ -49,17 +49,35 @@ namespace algoim::bernstein
     }
 
     // Evaluate an N-dimensional Bernstein polynomial at x
-    template<int N>
-    real evalBernsteinPoly(const xarray<real,N>& beta, const uvector<real,N>& x)
+    template <typename xdouble, int N>
+    xdouble evalBernsteinPoly(const xarray<xdouble, N> &beta, const uvector<xdouble, N> &x)
     {
-        uvector<real*,N> basis;
+        uvector<real *, N> basis;
         algoim_spark_alloc_vec(real, basis, beta.ext());
         for (int i = 0; i < N; ++i)
-            evalBernsteinBasis(x(i), beta.ext(i), basis(i));
+        {
+            if constexpr (std::is_same_v<double, xdouble>)
+            {
+                evalBernsteinBasis(x(i), beta.ext(i), basis(i));
+            }
+            else
+            {
+                evalBernsteinBasis(x(i).rpart(), beta.ext(i), basis(i));
+            }
+        }
+
         real r = 0.0;
         for (auto i = beta.loop(); ~i; ++i)
         {
-            real s = beta.l(i);
+            real s;
+            if constexpr (std::is_same_v<double, xdouble>)
+            {
+                s = beta.l(i);
+            }
+            else
+            {
+                s = beta.l(i).rpart(); /// using value
+            }
             for (int dim = 0; dim < N; ++dim)
                 s *= basis(dim)[i(dim)];
             r += s;
@@ -69,26 +87,31 @@ namespace algoim::bernstein
 
     // Fast evaluation of a 1-D Bernstein polynomial and its derivative; it is assumed that
     // binom == Binomial::row(P - 1), left to the caller to evaluate and cache, for speed
-    inline void bernsteinValueAndDerivative(const real* alpha, int P, const real* binom, real x, real& value, real& deriv)
+    template <typename xdouble>
+    inline void bernsteinValueAndDerivative(const xdouble *alpha, int P, const real *binom, real x, xdouble &value, xdouble &deriv)
     {
         assert(P > 1);
         real *a, *b;
         algoim_spark_alloc(real, &a, P, &b, P);
-        a[0] = 1; for (int i = 1; i < P; ++i) a[i] = a[i-1] * x;
-        b[0] = 1; for (int i = 1; i < P; ++i) b[i] = b[i-1] * (1 - x);
-        value = alpha[0] * b[P-1] + alpha[P-1] * a[P-1];
+        a[0] = 1;
+        for (int i = 1; i < P; ++i)
+            a[i] = a[i - 1] * x;
+        b[0] = 1;
+        for (int i = 1; i < P; ++i)
+            b[i] = b[i - 1] * (1 - x);
+        value = alpha[0] * b[P - 1] + alpha[P - 1] * a[P - 1];
         for (int i = 1; i < P - 1; ++i)
-            value += alpha[i] * binom[i] * a[i] * b[P-1-i];
-        deriv = (alpha[P-1] * a[P-2] - alpha[0] * b[P-2]) * (P - 1);
-        for (int i = 1; i < P-1; ++i)
-            deriv += alpha[i] * binom[i] * (a[i-1] * b[P-1-i] * i - a[i] * b[P-2-i] * (P-1-i));
+            value += alpha[i] * binom[i] * a[i] * b[P - 1 - i];
+        deriv = (alpha[P - 1] * a[P - 2] - alpha[0] * b[P - 2]) * (P - 1);
+        for (int i = 1; i < P - 1; ++i)
+            deriv += alpha[i] * binom[i] * (a[i - 1] * b[P - 1 - i] * i - a[i] * b[P - 2 - i] * (P - 1 - i));
     }
 
     // Evaluate the gradient of an N-dimensional Bernstein polynomial at x
-    template<int N>
-    uvector<real,N> evalBernsteinPolyGradient(const xarray<real,N>& beta, const uvector<real,N>& x)
+    template <int N>
+    uvector<real, N> evalBernsteinPolyGradient(const xarray<real, N> &beta, const uvector<real, N> &x)
     {
-        uvector<real*,N> basis, prime;
+        uvector<real *, N> basis, prime;
         algoim_spark_alloc_vec(real, basis, beta.ext());
         algoim_spark_alloc_vec(real, prime, beta.ext());
         for (int i = 0; i < N; ++i)
@@ -101,15 +124,15 @@ namespace algoim::bernstein
                 real *buff;
                 algoim_spark_alloc(real, &buff, P - 1);
                 evalBernsteinBasis(x(i), P - 1, buff);
-                prime(i)[0]     = (P - 1) * (          - buff[0]);
-                prime(i)[P-1]   = (P - 1) * (buff[P-2]          );
+                prime(i)[0] = (P - 1) * (-buff[0]);
+                prime(i)[P - 1] = (P - 1) * (buff[P - 2]);
                 for (int j = 1; j < P - 1; ++j)
-                    prime(i)[j] = (P - 1) * (buff[j-1] - buff[j]);
+                    prime(i)[j] = (P - 1) * (buff[j - 1] - buff[j]);
             }
             else
                 prime(i)[0] = 0.0;
         }
-        uvector<real,N> g = real(0.0);
+        uvector<real, N> g = real(0.0);
         for (auto i = beta.loop(); ~i; ++i)
         {
             for (int j = 0; j < N; ++j)
@@ -127,10 +150,10 @@ namespace algoim::bernstein
     }
 
     // Assuming p is represented in scaled Bernstein coefficients, reverse that scaling
-    template<int N>
-    void reverseScaledCoeff(xarray<real,N>& p)
+    template <int N>
+    void reverseScaledCoeff(xarray<real, N> &p)
     {
-        uvector<const real*,N> binom;
+        uvector<const real *, N> binom;
         for (int i = 0; i < N; ++i)
             binom(i) = Binomial::row(p.ext(i) - 1);
         for (auto i = p.loop(); i; ++i)
@@ -144,34 +167,36 @@ namespace algoim::bernstein
 
     // Squared L2 norm of a Bernstein polynomial; the result may be negative, but only if
     // the polynomial is essentially machine zero
-    template<int N>
-    real squaredL2norm(const xarray<real,N>& p)
+    template <int N>
+    real squaredL2norm(const xarray<real, N> &p)
     {
-        uvector<const real*,N> b1, b2;
+        uvector<const real *, N> b1, b2;
         for (int dim = 0; dim < N; ++dim)
         {
             b1(dim) = Binomial::row(p.ext(dim) - 1);
-            b2(dim) = Binomial::row(2*p.ext(dim) - 2);
+            b2(dim) = Binomial::row(2 * p.ext(dim) - 2);
         }
         real delta = 0;
-        for (auto i = p.loop(); ~i; ++i) for (auto j = p.loop(); ~j; ++j)
-        {
-            real g = 1;
-            for (int dim = 0; dim < N; ++dim)
-                g *= (b1(dim)[i(dim)] / b2(dim)[i(dim) + j(dim)]) * b1(dim)[j(dim)];
-            delta += p.l(i) * p.l(j) * g;
-        }
+        for (auto i = p.loop(); ~i; ++i)
+            for (auto j = p.loop(); ~j; ++j)
+            {
+                real g = 1;
+                for (int dim = 0; dim < N; ++dim)
+                    g *= (b1(dim)[i(dim)] / b2(dim)[i(dim) + j(dim)]) * b1(dim)[j(dim)];
+                delta += p.l(i) * p.l(j) * g;
+            }
         for (int dim = 0; dim < N; ++dim)
-            delta /= 2*p.ext(dim) - 1;
+            delta /= 2 * p.ext(dim) - 1;
         return delta;
     }
 
     // Collapse a multivariate Bernstein polynomial along a given axis-aligned line, i.e., the
     // set of points x where x(dim) is free and x(i) = x0(i) for all i != dim
     //   out: array of length beta.ext(dim)
-    template<int N>
-    void collapseAlongAxis(const xarray<real,N>& beta, const uvector<real,N-1>& x0, int dim, real* out)
+    template <typename xdouble, int N>
+    void collapseAlongAxis(const xarray<xdouble, N> &beta, const uvector<real, N - 1> &x0, int dim, xdouble *out)
     {
+        std::cout << "Inside collapseAlongAxis() " << std::endl;
         if constexpr (N == 1)
         {
             assert(dim == 0);
@@ -181,7 +206,7 @@ namespace algoim::bernstein
         else
         {
             assert(0 <= dim && dim < N);
-            uvector<real*,N-1> basis;
+            uvector<real *, N - 1> basis;
             algoim_spark_alloc_vec(real, basis, remove_component(beta.ext(), dim));
             for (int i = 0; i < N - 1; ++i)
             {
@@ -198,7 +223,7 @@ namespace algoim::bernstein
                     if (j < dim)
                         s *= basis(j)[i(j)];
                     else if (j > dim)
-                        s *= basis(j-1)[i(j)];
+                        s *= basis(j - 1)[i(j)];
                 out[i(dim)] += s;
             }
         }
@@ -206,8 +231,8 @@ namespace algoim::bernstein
 
     // Collapse a multivariate Bernstein polynomial along a given axis-orthogonal hyperplane,
     // i.e., the set of points x where x(dim) is a fixed given value
-    template<int N>
-    void collapseAlongHyperplane(const xarray<real,N>& beta, int dim, real x, xarray<real,N-1>& out)
+    template <int N>
+    void collapseAlongHyperplane(const xarray<real, N> &beta, int dim, real x, xarray<real, N - 1> &out)
     {
         static_assert(N > 1, "N > 1 required");
         assert(all(out.ext() == remove_component(beta.ext(), dim)));
@@ -222,8 +247,8 @@ namespace algoim::bernstein
     }
 
     // Normalise polynomial by its largest (in absolute value) coefficient
-    template<int N>
-    void normalise(xarray<real,N>& alpha)
+    template <int N>
+    void normalise(xarray<real, N> &alpha)
     {
         real x = alpha.maxNorm();
         if (x > 0)
@@ -233,8 +258,8 @@ namespace algoim::bernstein
     // Applying a simple examination of coefficient signs, returns +1 if the
     // polynomial is uniformly positive, -1 if the polynomial is uniformly
     // negative, or 0 if no guarantees can be made
-    template<typename xdouble, int N>
-    int uniformSign(const xarray<xdouble,N>& beta) 
+    template <typename xdouble, int N>
+    int uniformSign(const xarray<xdouble, N> &beta)
     {
         int s = util::sign(beta[0]);
         for (int i = 1; i < beta.size(); ++i)
@@ -246,8 +271,8 @@ namespace algoim::bernstein
     // Compute coefficients of derivative in lower degree basis
     //   alpha: array of length P
     //   out: array of length P - 1
-    template<typename T>
-    void bernsteinDerivative(const T* alpha, int P, T* out)
+    template <typename T>
+    void bernsteinDerivative(const T *alpha, int P, T *out)
     {
         assert(P >= 2);
         for (int i = 0; i < P - 1; ++i)
@@ -259,8 +284,8 @@ namespace algoim::bernstein
     }
 
     // Compute the derivative of a Bernstein polynomial
-    template<int N>
-    void bernsteinDerivative(const xarray<real,N>& a, int dim, xarray<real,N>& out)
+    template <int N>
+    void bernsteinDerivative(const xarray<real, N> &a, int dim, xarray<real, N> &out)
     {
         assert(all(out.ext() == inc_component(a.ext(), dim, -1)));
         int P = a.ext(dim);
@@ -272,8 +297,8 @@ namespace algoim::bernstein
 
     // Compute the derivative of a Bernstein polynomial, in the original basis;
     // equivalent to computing normal derivative, and then elevating once
-    template<int N>
-    void elevatedDerivative(const xarray<real,N>& a, int dim, xarray<real,N>& out)
+    template <int N>
+    void elevatedDerivative(const xarray<real, N> &a, int dim, xarray<real, N> &out)
     {
         assert(all(out.ext() == a.ext()) && 0 <= dim && dim < N);
         int P = a.ext(dim);
@@ -284,13 +309,13 @@ namespace algoim::bernstein
             else if (i(dim) == P - 1)
                 out.l(i) = (a.l(i) - a.m(i.shifted(dim, -1))) * (P - 1);
             else
-                out.l(i) = a.m(i.shifted(dim, -1)) * (-i(dim)) + a.l(i) * (2*i(dim) - P + 1) + a.m(i.shifted(dim, 1)) * (P - 1 - i(dim));
+                out.l(i) = a.m(i.shifted(dim, -1)) * (-i(dim)) + a.l(i) * (2 * i(dim) - P + 1) + a.m(i.shifted(dim, 1)) * (P - 1 - i(dim));
         }
     }
 
     // Apply de Casteljau algorithm to compute the Bernstein coefficients of alpha relative to the interval [0,tau]
-    template<typename xdouble, int N>
-    void deCasteljauLeft(xarray<xdouble, N>& alpha, real tau)
+    template <typename xdouble, int N>
+    void deCasteljauLeft(xarray<xdouble, N> &alpha, real tau)
     {
         int P = alpha.ext(0);
         for (int i = 1; i < P; ++i)
@@ -302,8 +327,8 @@ namespace algoim::bernstein
     }
 
     // Apply de Casteljau algorithm to compute the Bernstein coefficients of alpha relative to the interval [tau,1]
-    template<typename xdouble, int N>
-    void deCasteljauRight(xarray<xdouble,N>& alpha, real tau)
+    template <typename xdouble, int N>
+    void deCasteljauRight(xarray<xdouble, N> &alpha, real tau)
     {
         int P = alpha.ext(0);
         for (int i = 1; i < P; ++i)
@@ -318,22 +343,22 @@ namespace algoim::bernstein
     // to the hyperrectangle [a,b]. It is assumed that the given arrays a & b each have
     // length at least N. If, for a particular dimension, a[dim] > b[dim], both the interval
     // and coefficients are reversed.
-    template<typename xdouble, int N, bool B = false>
-    void deCasteljau(xarray<xdouble,N>& alpha, const real* a, const real* b)
+    template <typename xdouble, int N, bool B = false>
+    void deCasteljau(xarray<xdouble, N> &alpha, const real *a, const real *b)
     {
-        using std::swap;
         using std::abs;
+        using std::swap;
         if constexpr (N == 1 || B)
         {
             int P = alpha.ext(0);
             if (*b < *a)
             {
-                deCasteljau<xdouble, N,B>(alpha, b, a);
+                deCasteljau<xdouble, N, B>(alpha, b, a);
                 for (int i = 0; i < P / 2; ++i)
                     swap(alpha.a(i), alpha.a(P - 1 - i));
                 return;
             }
-            if (abs(*b) >= abs(*a - 1))
+            if (fabs(*b) >= fabs(*a - 1))
             {
                 deCasteljauLeft(alpha, *b);
                 deCasteljauRight(alpha, *a / *b);
@@ -341,12 +366,12 @@ namespace algoim::bernstein
             else
             {
                 deCasteljauRight(alpha, *a);
-                deCasteljauLeft(alpha, (*b - *a)/(real(1) - *a));
+                deCasteljauLeft(alpha, (*b - *a) / (real(1) - *a));
             }
         }
         else
         {
-            deCasteljau<xdouble, 2,true>(alpha.flatten().ref(), a, b);
+            deCasteljau<xdouble, 2, true>(alpha.flatten().ref(), a, b);
             for (int i = 0; i < alpha.ext(0); ++i)
                 deCasteljau(alpha.slice(i).ref(), a + 1, b + 1);
         }
@@ -355,8 +380,8 @@ namespace algoim::bernstein
     // Apply de Casteljau algorithm to compute the Bernstein coefficients of alpha relative
     // to the hyperrectangle [a,b]. If, for a particular dimension, a[dim] > b[dim], both the
     // interval and coefficients are reversed.
-    template<typename xdouble, int N>
-    void deCasteljau(const xarray<xdouble,N>& alpha, const uvector<real,N>& a, const uvector<real,N>& b, xarray<xdouble,N>& out)
+    template <typename xdouble, int N>
+    void deCasteljau(const xarray<xdouble, N> &alpha, const uvector<real, N> &a, const uvector<real, N> &b, xarray<xdouble, N> &out)
     {
         assert(all(out.ext() == alpha.ext()));
         out = alpha;
@@ -364,8 +389,8 @@ namespace algoim::bernstein
     }
 
     // Elevate the degree of a Bernstein polynomial
-    template<typename xdouble, int N, bool B = false>
-    void bernsteinElevate(const xarray<xdouble,N>& alpha, xarray<xdouble,N>& beta)
+    template <typename xdouble, int N, bool B = false>
+    void bernsteinElevate(const xarray<xdouble, N> &alpha, xarray<xdouble, N> &beta)
     {
         assert(all(beta.ext() >= alpha.ext()));
         if constexpr (N == 1 || B)
@@ -383,7 +408,7 @@ namespace algoim::bernstein
                 if (r == 1)
                 {
                     beta.a(0) = alpha.a(0);
-                    beta.a(n+1) = alpha.a(n);
+                    beta.a(n + 1) = alpha.a(n);
                     for (int k = 1; k <= n; ++k)
                     {
                         beta.a(k) = alpha.a(k - 1) * (real(k) / real(n + 1));
@@ -391,22 +416,22 @@ namespace algoim::bernstein
                     }
                     return;
                 }
-                const real* bn = Binomial::row(n);
-                const real* br = Binomial::row(r);
-                const real* bnr = Binomial::row(n + r);
+                const real *bn = Binomial::row(n);
+                const real *br = Binomial::row(r);
+                const real *bnr = Binomial::row(n + r);
                 for (int k = 0; k <= n + r; ++k)
                 {
                     beta.a(k) = 0.0;
                     for (int j = std::max(0, k - r); j <= std::min(n, k); ++j)
-                        beta.a(k) += alpha.a(j) * ((br[k-j] * bn[j]) / bnr[k]);
+                        beta.a(k) += alpha.a(j) * ((br[k - j] * bn[j]) / bnr[k]);
                 }
             }
         }
         else
         {
-            xarray<xdouble,N> gamma(nullptr, set_component(alpha.ext(), 0, beta.ext(0)));
+            xarray<xdouble, N> gamma(nullptr, set_component(alpha.ext(), 0, beta.ext(0)));
             algoim_spark_alloc(xdouble, gamma);
-            bernsteinElevate<xdouble, 2,true>(alpha.flatten(), gamma.flatten().ref());
+            bernsteinElevate<xdouble, 2, true>(alpha.flatten(), gamma.flatten().ref());
             for (int i = 0; i < beta.ext(0); ++i)
                 bernsteinElevate(gamma.slice(i), beta.slice(i).ref());
         }
@@ -422,7 +447,7 @@ namespace algoim::bernstein
         //   in: alpha, length P, shall be overwritten
         //   in: beta, length P, shall be overwritten
         //   in: b, overwritten with first P rows yielding least squares solution
-        inline void lsqr_bidiagonal(real *alpha, real *beta, int P, xarray<real,2>& b)
+        inline void lsqr_bidiagonal(real *alpha, real *beta, int P, xarray<real, 2> &b)
         {
             assert(b.ext(0) == P + 1 && b.ext(1) > 0);
             real *gamma;
@@ -432,11 +457,12 @@ namespace algoim::bernstein
                 real c, s;
                 util::givens_get(alpha[i], beta[i], c, s);
                 util::givens_rotate(alpha[i], beta[i], c, s);
-                if (i < P - 1) util::givens_rotate(gamma[i+1], alpha[i+1], c, s);
+                if (i < P - 1)
+                    util::givens_rotate(gamma[i + 1], alpha[i + 1], c, s);
                 for (int k = 0; k < b.ext(1); ++k)
-                    util::givens_rotate(b(i,k), b(i+1,k), c, s);
+                    util::givens_rotate(b(i, k), b(i + 1, k), c, s);
             }
-            b.a(P-1) /= alpha[P-1];
+            b.a(P - 1) /= alpha[P - 1];
             for (int i = P - 2; i >= 0; --i)
             {
                 b.a(i) -= b.a(i + 1) * gamma[i + 1];
@@ -448,8 +474,8 @@ namespace algoim::bernstein
     // Reduce by one the effective degree of a Bernstein polynomial; this routine
     // mainly makes sense when the actual polynomial degree is less than the one
     // used in its (starting) Bernstein polynomial representation
-    template<int N, bool B = false>
-    void bernsteinReduction(xarray<real,N>& alpha, int dim)
+    template <int N, bool B = false>
+    void bernsteinReduction(xarray<real, N> &alpha, int dim)
     {
         assert(all(alpha.ext() >= 1) && 0 <= dim && dim < N && alpha.ext(dim) >= 2);
         if (dim == 0)
@@ -458,24 +484,24 @@ namespace algoim::bernstein
             real *a, *b;
             algoim_spark_alloc(real, &a, P, &b, P);
             a[0] = 1;
-            b[P-1] = 1;
+            b[P - 1] = 1;
             for (int k = 1; k < P; ++k)
             {
                 a[k] = real(1) - real(k) / real(P);
-                b[k-1] = real(k) / real(P);
+                b[k - 1] = real(k) / real(P);
             }
-            xarray<real,2> view(alpha.data(), uvector<int,2>{P + 1, prod(alpha.ext(), 0)});
+            xarray<real, 2> view(alpha.data(), uvector<int, 2>{P + 1, prod(alpha.ext(), 0)});
             detail::lsqr_bidiagonal(a, b, P, view);
         }
         else if constexpr (N > 1)
         {
             for (int i = 0; i < alpha.ext(0); ++i)
-                bernsteinReduction<N-1,true>(alpha.slice(i).ref(), dim - 1);
+                bernsteinReduction<N - 1, true>(alpha.slice(i).ref(), dim - 1);
         }
 
         if (!B)
         {
-            xarray<real,N> beta(nullptr, alpha.ext());
+            xarray<real, N> beta(nullptr, alpha.ext());
             algoim_spark_alloc(real, beta);
             beta = alpha;
             alpha.alterExtent(inc_component(alpha.ext(), dim, -1));
@@ -485,17 +511,17 @@ namespace algoim::bernstein
     }
 
     // Automatically reduce the degree of alpha; returns true iff degree reduction occurred
-    template<int N>
-    bool autoReduction(xarray<real,N>& alpha, real tol = 1.0e3 * std::numeric_limits<real>::epsilon(), int dim = 0)
+    template <int N>
+    bool autoReduction(xarray<real, N> &alpha, real tol = 1.0e3 * std::numeric_limits<real>::epsilon(), int dim = 0)
     {
-        using std::sqrt;
         using std::abs;
+        using std::sqrt;
         if (dim < 0 || dim >= N || tol <= 0)
             return false;
         bool stay = false;
         if (alpha.ext(dim) >= 2)
         {
-            xarray<real,N> beta(nullptr, alpha.ext()), gamma(nullptr, alpha.ext());
+            xarray<real, N> beta(nullptr, alpha.ext()), gamma(nullptr, alpha.ext());
             algoim_spark_alloc(real, beta, gamma);
             beta = alpha;
             bernsteinReduction(beta, dim);
@@ -521,31 +547,40 @@ namespace algoim::bernstein
 
     // Determine if there is a scalar alpha such that sign x(i) + alpha y(i) > 0 for every component i;
     // if sign = 0, then returns true if it holds for sign = 1 and/or sign = -1
-    template<typename xdouble, int N>
-    bool orthantTestBase(const xarray<xdouble,N>& x, const xarray<xdouble,N>& y, int sign = 0)
+    template <typename xdouble, int N>
+    bool orthantTestBase(const xarray<xdouble, N> &x, const xarray<xdouble, N> &y, int sign = 0)
     {
         assert(sign == 0 || sign == -1 || sign == 1);
         assert(all(x.ext() == y.ext()));
-        using std::min;
-        using std::max;
-        using std::isinf;
         using std::abs;
+        using std::isinf;
+        using std::max;
+        using std::min;
         if (sign == 0)
             return orthantTestBase(x, y, -1) || orthantTestBase(x, y, 1);
-        real alphaMax =  std::numeric_limits<real>::infinity();
+        real alphaMax = std::numeric_limits<real>::infinity();
         real alphaMin = -std::numeric_limits<real>::infinity();
         for (int i = 0; i < x.size(); ++i)
         {
+            real alpha_ratio;
+            if constexpr (std::is_same_v<double, xdouble>)
+            {
+                alpha_ratio = -x[i] / y[i] * sign;
+            }
+            else
+            {
+                alpha_ratio = -(x[i] / y[i]).rpart() * sign;
+            }
             if (y[i] == 0.0 && (x[i] * sign) <= 0.0)
                 return false;
             if (y[i] > 0.0)
-                alphaMin = max(alphaMin, value(-x[i] / y[i]) * sign);
+                alphaMin = max(alphaMin, alpha_ratio);
             else if (y[i] < 0.0)
-                alphaMax = min(alphaMax, value(-x[i] / y[i]) * sign);  /// using adept values 
+                alphaMax = min(alphaMax, alpha_ratio); /// using adept values
         }
         if (isinf(alphaMin) || isinf(alphaMax))
             return true;
-        if (alphaMax - alphaMin > 1.0e5 * std::numeric_limits<real>::epsilon() * max(abs(alphaMin), abs(alphaMax)))
+        if (alphaMax - alphaMin > 1.0e5 * std::numeric_limits<real>::epsilon() * max(fabs(alphaMin), fabs(alphaMax)))
             return true;
         return false;
     }
@@ -553,15 +588,15 @@ namespace algoim::bernstein
     // Determine if there are scalars alpha and beta such that {alpha f + beta g > 0} holds for every
     // Bernstein coefficient of f and g: if one of the polynomials has a smaller degree than the other,
     // it is degree elevated so that the two polynomials have the same degree
-    template<typename xdouble, int N>
-    bool orthantTest(const xarray<xdouble,N>& f, const xarray<xdouble,N>& g)
+    template <typename xdouble, int N>
+    bool orthantTest(const xarray<xdouble, N> &f, const xarray<xdouble, N> &g)
     {
         if (all(f.ext() == g.ext()))
             return orthantTestBase(f, g);
         else
         {
-            uvector<int,N> ext = max(f.ext(), g.ext());
-            xarray<xdouble,N> fe(nullptr, ext), ge(nullptr, ext);
+            uvector<int, N> ext = max(f.ext(), g.ext());
+            xarray<xdouble, N> fe(nullptr, ext), ge(nullptr, ext);
             algoim_spark_alloc(xdouble, fe, ge);
             bernsteinElevate(f, fe);
             bernsteinElevate(g, ge);
@@ -590,25 +625,25 @@ namespace algoim::bernstein
         static SVD get(int P)
         {
             assert(P >= 1);
-            static thread_local std::unordered_map<int,std::vector<real>> cache;
+            static thread_local std::unordered_map<int, std::vector<real>> cache;
             if (cache.count(P) == 1)
             {
                 real *base = cache.at(P).data();
-                return SVD{base, base + P*P, base + 2*P*P};
+                return SVD{base, base + P * P, base + 2 * P * P};
             }
 
             real *A, *superb, *basis;
-            algoim_spark_alloc(real, &A, P*P, &superb, P, &basis, P);
+            algoim_spark_alloc(real, &A, P * P, &superb, P, &basis, P);
             for (int i = 0; i < P; ++i)
             {
                 evalBernsteinBasis(modifiedChebyshevNode(i, P), P, basis);
                 for (int j = 0; j < P; ++j)
-                    A[i*P + j] = basis[j];
+                    A[i * P + j] = basis[j];
             }
 
-            cache[P].resize(P*P + P*P + P);
+            cache[P].resize(P * P + P * P + P);
             real *base = cache[P].data();
-            SVD result{base, base + P*P, base + 2*P*P};
+            SVD result{base, base + P * P, base + 2 * P * P};
             int info;
             static_assert(std::is_same_v<real, double>, "Algoim's default LAPACK code assumes real == double; a custom SVD solver is required when real != double");
             info = LAPACKE_dgesvd(LAPACK_ROW_MAJOR, 'A', 'A', P, P, A, P, result.sigma, result.U, P, result.Vt, P, superb);
@@ -618,10 +653,11 @@ namespace algoim::bernstein
     };
 
     // Interpolate tensor-product data f, assumed to be nodal values at the same nodes returned by modifiedChebyshevNode()
-    template<typename xdouble, int N, bool B = false>
-    void bernsteinInterpolate(const xarray<xdouble,N>& f, real tol, xarray<xdouble,N>& out)
+    template <typename xdouble, int N, bool B = false>
+    void bernsteinInterpolate(const xarray<xdouble, N> &f, real tol, xarray<xdouble, N> &out)
     {
-        std::cout << "Inside bernsteinInterpolate2: " << std::endl;
+        std::cout << "Inside bernsteinInterpolate2( ) " << std::endl;
+        std::cout << "out.ext( ) " << out.ext() << std::endl;
         assert(all(out.ext() == f.ext()));
         if constexpr (N == 1 || B)
         {
@@ -630,7 +666,6 @@ namespace algoim::bernstein
             assert(P >= 1 && O >= 1);
             xdouble *tmp;
             algoim_spark_alloc(xdouble, &tmp, P * O);
-
             auto svd = BernsteinVandermondeSVD::get(P);
 
             for (int i = 0; i < P * O; ++i)
@@ -638,46 +673,55 @@ namespace algoim::bernstein
             for (int i = 0; i < P; ++i)
                 for (int j = 0; j < P; ++j)
                     for (int k = 0; k < O; ++k)
-                        tmp[i*O + k] += svd.U[j*P + i] * f[j*O + k];
+                        tmp[i * O + k] += svd.U[j * P + i] * f[j * O + k];
 
             real minsigma = tol * svd.sigma[0];
             for (int i = 0; i < P; ++i)
             {
                 real alpha = (svd.sigma[i] >= minsigma) ? (real(1) / svd.sigma[i]) : 0.0;
                 for (int k = 0; k < O; ++k)
-                    tmp[i*O + k] *= alpha;
+                    tmp[i * O + k] *= alpha;
             }
 
             out = 0;
             for (int i = 0; i < P; ++i)
                 for (int j = 0; j < P; ++j)
                     for (int k = 0; k < O; ++k)
-                        out[i*O + k] += svd.Vt[j*P + i] * tmp[j*O + k];
+                        out[i * O + k] += svd.Vt[j * P + i] * tmp[j * O + k];
         }
         else
         {
-            xarray<xdouble,N> gamma(nullptr, f.ext());
-            algoim_spark_alloc(xdouble, gamma);        
-            bernsteinInterpolate<xdouble, 2,true>(f.flatten(), tol, gamma.flatten().ref());
+            xarray<xdouble, N> gamma(nullptr, f.ext());
+            algoim_spark_alloc(xdouble, gamma);
+            bernsteinInterpolate<xdouble, 2, true>(f.flatten(), tol, gamma.flatten().ref());
             for (int i = 0; i < f.ext(0); ++i)
                 bernsteinInterpolate(gamma.slice(i), tol, out.slice(i).ref());
         }
     }
 
     // Interpolate a functional through its nodal evaluation at the modifiedChebyshevNode() points
-    template<typename xdouble, int N, typename F>
-    void bernsteinInterpolate(F&& f, xarray<xdouble,N>& out)
+    template <typename xdouble, int N, typename F>
+    void bernsteinInterpolate(F &&f, xarray<xdouble, N> &out)
     {
-        std::cout << "Inside bernsteinInterpolate: " << std::endl;
+        std::cout << "Inside bernsteinInterpolate ( ) " << std::endl;
         using namespace std;
-        xarray<xdouble,N> ff(nullptr, out.ext());
+        xarray<xdouble, N> ff(nullptr, out.ext());
         algoim_spark_alloc(xdouble, ff);
         for (auto i = ff.loop(); ~i; ++i)
         {
-            uvector<real,N> x;
+            // std::cout << "inside ff.loop() " << std::endl;
+            uvector<real, N> x;
             for (int dim = 0; dim < N; ++dim)
                 x(dim) = modifiedChebyshevNode(i(dim), out.ext(dim));
-            ff.l(i) = f(x);
+            if constexpr (std::is_same_v<double, xdouble>)
+            {
+                ff.l(i) = f(x);
+            }
+            else
+            {
+                ff.l(i) = f(x);
+            }
+            std::cout << " ff.l(i) " << ff.l(i) << std::endl;
         }
         bernsteinInterpolate(ff, std::pow(100.0 * std::numeric_limits<real>::epsilon(), 1.0 / N), out);
     }
@@ -689,6 +733,7 @@ namespace algoim::bernstein
         //   out: array of length N x 2
         inline void generalisedEigenvalues(xarray<real, 2> &A, xarray<real, 2> &B, xarray<real, 2> &out)
         {
+            std::cout << "Inside generalisedEigenvalues( ), Lapack is called here !!! " << std::endl;
             int N = A.ext(0);
             assert(all(A.ext() == N) && all(B.ext() == N) && out.ext(0) == N && out.ext(1) == 2);
             real *alphar, *alphai, *beta, *lscale, *rscale;
@@ -713,24 +758,45 @@ namespace algoim::bernstein
     // Compute all complex  roots of a Bernstein polynomial
     //   alpha: array of length P
     //   out: array of length (P-1) x 2
-    inline void rootsBernsteinPoly(const real* alpha, int P, xarray<real,2>& out)
+    template <typename xdouble>
+    inline void rootsBernsteinPoly(const xdouble *alpha, int P, xarray<real, 2> &out)
     {
+        std::cout << "Inside rootsBernsteinPoly( ) " << std::endl;
         assert(P >= 2 && out.ext(0) == P - 1 && out.ext(1) == 2);
-        using std::max;
         using std::abs;
+        using std::max;
 
         real *beta;
         algoim_spark_alloc(real, &beta, P);
         real tol = 0.0;
         for (int i = 0; i < P; ++i)
-            tol = max(tol, abs(alpha[i]));
+        {
+            if constexpr (std::is_same_v<double, xdouble>)
+            {
+                tol = max(tol, abs(alpha[i]));
+            }
+            else
+            {
+                tol = max(tol, abs(alpha[i].rpart()));
+            }
+        }
+
         tol *= util::sqr(std::numeric_limits<real>::epsilon());
         for (int i = 0; i < P; ++i)
-            beta[i] = (abs(alpha[i]) > tol) ? alpha[i] : 0;
+        {
+            if constexpr (std::is_same_v<double, xdouble>)
+            {
+                beta[i] = (abs(alpha[i]) > tol) ? alpha[i] : 0;
+            }
+            else
+            {
+                beta[i] = (abs(alpha[i].rpart()) > tol) ? alpha[i].rpart() : 0;
+            }
+        }
 
         int N = P - 1;
-        xarray<real,2> A(nullptr, uvector<int,2>{N, N});
-        xarray<real,2> B(nullptr, uvector<int,2>{N, N});
+        xarray<real, 2> A(nullptr, uvector<int, 2>{N, N});
+        xarray<real, 2> B(nullptr, uvector<int, 2>{N, N});
         algoim_spark_alloc(real, A, B);
         A = 0;
         B = 0;
@@ -741,7 +807,6 @@ namespace algoim::bernstein
         B(N - 1, N - 1) += beta[N] / N;
         for (int i = 0; i < N - 1; ++i)
             B(i, i) = real(N - i) / real(i + 1);
-
         detail::generalisedEigenvalues(A, B, out);
     }
 
@@ -749,21 +814,22 @@ namespace algoim::bernstein
     {
         // Newton's method safeguarded by a standard bisection method; in Bernstein application it
         // is only be applied to a Bernstein polynomial guaranteed to have just one real root
-        template<typename F>
-        bool newtonBisectionSearch(const F& f, real x0, real x1, real tol, int maxsteps, real& root)
+        template <typename xdouble, typename F>
+        bool newtonBisectionSearch(const F &f, real x0, real x1, real tol, int maxsteps, real &root)
         {
+            std::cout << "Inside newtonBisectionSearch( ) " << std::endl;
             using std::abs;
-            real f0, f1, dummy;
+            xdouble f0, f1, dummy;
             f(x0, f0, dummy);
             f(x1, f1, dummy);
             if ((f0 > 0.0 && f1 > 0.0) || (f0 < 0.0 && f1 < 0.0))
                 return false;
-            if (f0 == real(0.0))
+            if (f0 == xdouble(0.0))
             {
                 root = x0;
                 return true;
             }
-            if (f1 == real(0.0))
+            if (f1 == xdouble(0.0))
             {
                 root = x1;
                 return true;
@@ -774,16 +840,24 @@ namespace algoim::bernstein
                 std::swap(x0, x1);
 
             // Initial guess is midpoint
-            real x = (x0 + x1)*0.5;
-            real fx, fpx;
+            real x = (x0 + x1) * 0.5;
+            xdouble fx, fpx;
             f(x, fx, fpx);
             real dx = x1 - x0;
             for (int step = 0; step < maxsteps; ++step)
             {
-                if ((fpx*(x - x0) - fx)*(fpx*(x - x1) - fx) < 0.0 && abs(fx) < abs(dx*fpx)*0.5)
+                if ((fpx * (x - x0) - fx) * (fpx * (x - x1) - fx) < 0.0 && fabs(fx) < fabs(dx * fpx) * 0.5)
                 {
                     // Step in Newton's method falls within bracket and is less than half the previous step size
-                    dx = -fx / fpx;
+                    if constexpr (std::is_same_v<double, xdouble>)
+                    {
+                        dx = -fx / fpx;
+                    }
+                    else
+                    {
+                        dx = value(-fx / fpx);
+                    }
+
                     real xold = x;
                     x += dx;
                     if (xold == x)
@@ -795,7 +869,7 @@ namespace algoim::bernstein
                 else
                 {
                     // Revert to bisection
-                    dx = (x1 - x0)*0.5;
+                    dx = (x1 - x0) * 0.5;
                     x = x0 + dx;
                     if (x == x0)
                     {
@@ -823,7 +897,7 @@ namespace algoim::bernstein
         }
     }
 
-    // Compute, if possible, a simple real root in [0,1] of a Bernstein polynomial using 
+    // Compute, if possible, a simple real root in [0,1] of a Bernstein polynomial using
     // Descartes' rule of signs:
     //   - if it can be guaranteed that there is exactly 0 roots, 0 is returned
     //   - if it can be guaranteed that there is exactly 1 root, and that root has
@@ -831,35 +905,37 @@ namespace algoim::bernstein
     //   - if some coefficients are close to zero (thereby preventing a reliable use of
     //     Descartes' rule), -1 is returned
     //   - if no other guarantees can be made, -1 is returned
-    inline int bernsteinSimpleRoot(const real* alpha, int P, real tol, real& root)
+    template <typename xdouble>
+    inline int bernsteinSimpleRoot(const xdouble *alpha, int P, xdouble tol, real &root)
     {
+        std::cout << "Inside bernsteinSimpleRoot( ) " << std::endl;
         assert(P >= 2);
-        using std::abs;
         for (int i = 0; i < P; ++i)
-            if (abs(alpha[i]) < tol)
+            if (fabs(alpha[i]) < tol)
                 return -1;
         int count = 0;
         for (int i = 1; i < P; ++i)
-            if (alpha[i-1] < 0 && alpha[i] >= 0 || alpha[i-1] >= 0 && alpha[i] < 0)
+            if (alpha[i - 1] < 0 && alpha[i] >= 0 || alpha[i - 1] >= 0 && alpha[i] < 0)
                 ++count;
         if (count == 0)
             return 0;
         if (count > 1)
             return -1;
         real newton_tol = 10.0 * std::numeric_limits<real>::epsilon();
-        const real* binom = Binomial::row(P - 1);
-        bool b = detail::newtonBisectionSearch([=](real x, real& value, real& prime)
-        {
-            bernsteinValueAndDerivative(alpha, P, binom, x, value, prime);
-        }, 0, 1, newton_tol, 12, root);
+        const real *binom = Binomial::row(P - 1);
+        bool b = detail::newtonBisectionSearch<xdouble>([=](real x, xdouble &value, xdouble &prime)
+                                                        { bernsteinValueAndDerivative(alpha, P, binom, x, value, prime); },
+                                                        0, 1, newton_tol, 12, root);
         return b ? 1 : -1;
     }
 
     // Compute real roots of a Bernstein polynomial using a bisection + Newton's method approach.
     // Returns the number of real roots computed (and recorded in out, a buffer of size at least
-    // P - 1), or -1 if failed
-    inline int rootsBernsteinPolyFast(const xarray<real,1>& alpha, real a, real b, int depth, real tol, real* out)
+    // P - 1), or -1 if
+    template <typename xdouble>
+    inline int rootsBernsteinPolyFast(const xarray<xdouble, 1> &alpha, real a, real b, int depth, xdouble tol, xdouble *out)
     {
+        std::cout << "Inside rootsBernsteinPolyFast( ) " << std::endl;
         // Try simple root method
         real root;
         int res = bernsteinSimpleRoot(alpha.data(), alpha.ext(0), tol, root);
@@ -870,24 +946,24 @@ namespace algoim::bernstein
         // transform that root to the [a,b] interval, record it, and return
         if (res == 1)
         {
-            *out = a + (b - a)*root;
+            *out = a + (b - a) * root;
             return 1;
         }
         // Otherwise, the simple root method failed. Apply bisection, provided not already too deep
         if (depth >= 4)
             return -1;
-        xarray<real,1> beta(nullptr, alpha.ext());
-        algoim_spark_alloc(real, beta);
+        xarray<xdouble, 1> beta(nullptr, alpha.ext());
+        algoim_spark_alloc(xdouble, beta);
         // Apply to left half
         beta = alpha;
         deCasteljauLeft(beta, 0.5);
-        int r1 = rootsBernsteinPolyFast(beta, a, a + (b - a)*0.5, depth + 1, tol, out);
+        int r1 = rootsBernsteinPolyFast(beta, a, a + (b - a) * 0.5, depth + 1, tol, out);
         if (r1 < 0)
             return -1;
-        // Apply to right half, shifting buffer by r1 
+        // Apply to right half, shifting buffer by r1
         beta = alpha;
         deCasteljauRight(beta, 0.5);
-        int r2 = rootsBernsteinPolyFast(beta, a + (b - a)*0.5, b, depth + 1, tol, out + r1);
+        int r2 = rootsBernsteinPolyFast(beta, a + (b - a) * 0.5, b, depth + 1, tol, out + r1);
         if (r2 < 0)
             return -1;
         return r1 + r2;
@@ -895,19 +971,21 @@ namespace algoim::bernstein
 
     // Apply generalised eigenvalue method to compute the real roots of alpha in the interval [0,1],
     // returning the number of roots recorded in 'out', a buffer of size at least P - 1
-    inline int bernsteinUnitIntervalRealRoots_eigenvalue(const real* alpha, int P, real* out)
+    template <typename xdouble>
+    inline int bernsteinUnitIntervalRealRoots_eigenvalue(const xdouble *alpha, int P, xdouble *out)
     {
+        std::cout << "Inside bernsteinUnitIntervalRealRoots_eigenvalue( ) " << std::endl;
         using std::abs;
-        xarray<real,2> roots(nullptr, uvector<int,2>{P - 1, 2});
+        xarray<real, 2> roots(nullptr, uvector<int, 2>{P - 1, 2});
         algoim_spark_alloc(real, roots);
         rootsBernsteinPoly(alpha, P, roots);
         real tol = 1.0e4 * std::numeric_limits<real>::epsilon(); // nearly-real-root tolerance
         int count = 0;
         for (int j = 0; j < P - 1; ++j)
         {
-            if (0 <= roots(j,0) && roots(j,0) <= 1 && abs(roots(j,1)) < tol)
+            if (0 <= roots(j, 0) && roots(j, 0) <= 1 && fabs(roots(j, 1)) < tol)
             {
-                *(out + count) = roots(j,0);
+                *(out + count) = roots(j, 0);
                 ++count;
             }
         }
@@ -917,18 +995,21 @@ namespace algoim::bernstein
     // Apply a Newton's method-based approach to compute the real roots of alpha in the interval [0,1];
     // if succeeded, returns the number of roots recorded in 'out' (a buffer of size at least P -1);
     // if failed, returns -1
-    inline int bernsteinUnitIntervalRealRoots_fast(const real* alpha, int P, real* out)
+    template <typename xdouble>
+    inline int bernsteinUnitIntervalRealRoots_fast(const xdouble *alpha, int P, xdouble *out)
     {
+        std::cout << "Inside bernsteinUnitIntervalRealRoots_fast( ) " << std::endl;
+        using adept::abs;
+        using adept::max;
         using std::max;
-        using std::abs;
         // Compute a tolerance by which to declare a nearly-zero coefficient as being
         // too close to zero (for Descartes' rule of signs and to avoid problems where
         // a root lies close to a subinterval endpoint which can confuse bisection)
-        real tol = 0;
+        xdouble tol = 0;
         for (int i = 0; i < P; ++i)
-            tol = max(tol, abs(alpha[i]));
+            tol = max(tol, fabs(alpha[i]));
         tol *= 1.0e4 * std::numeric_limits<real>::epsilon(); // nearly zero coeff tolerance, can be loose
-        return rootsBernsteinPolyFast(xarray<real,1>(const_cast<real*>(alpha), P), 0, 1, 0, tol, out);
+        return rootsBernsteinPolyFast(xarray<xdouble, 1>(const_cast<xdouble *>(alpha), P), 0, 1, 0, tol, out);
     }
 
     // Driver method to compute the real roots of a Bernstein polynomial in the interval [0,1];
@@ -936,8 +1017,13 @@ namespace algoim::bernstein
     // anywhere between 10x and 100x faster than the backup approach; if the fast approach fails,
     // the backup method is applied. Returns the number of computed roots, recorded in the buffer
     // 'out' of size at least P - 1
-    inline int bernsteinUnitIntervalRealRoots(const real* alpha, int P, real* out)
+    inline int bernsteinUnitIntervalRealRoots(const real *alpha, int P, real *out)
     {
+        std::cout << "Inside bernsteinUnitIntervalRealRoots( ) " << std::endl;
+        for (int i = 0; i < P; ++i)
+        {
+            std::cout << "alpha: " << alpha[i] << std::endl;
+        }
         using std::sqrt;
         if (P == 1)
             return 0;
@@ -945,9 +1031,11 @@ namespace algoim::bernstein
         // Direct method for linear polynomials
         if (P == 2)
         {
-            if (alpha[0] == alpha[1]) return 0;
+            if (alpha[0] == alpha[1])
+                return 0;
             real x = alpha[0] / (alpha[0] - alpha[1]);
-            if (x < 0 || x > 1) return 0;
+            if (x < 0 || x > 1)
+                return 0;
             *out = x;
             return 1;
         }
@@ -958,58 +1046,114 @@ namespace algoim::bernstein
             real a = alpha[0] - alpha[1] * 2 + alpha[2];
             real b = (alpha[1] - alpha[0]) * 2;
             real c = alpha[0];
-            real delta = b*b - a*c*4;
-            if (delta < 0) return 0;
-            real q = -0.5 * (b + (b >= 0 ? sqrt(delta) : -sqrt(delta)));
+            real delta = b * b - a * c * 4;
+            if (delta < 0)
+                return 0;
+            real q;
+            q = -0.5 * (b + (b >= 0 ? std::sqrt(delta) : -std::sqrt(delta)));
             real r1 = q / a;
             real r2 = c / q;
             int count = 0;
-            if (0 <= r1 && r1 <= 1) { *out = r1; ++count; }
-            if (0 <= r2 && r2 <= 1) { *(out + count) = r2; ++count; }
+            if (0 <= r1 && r1 <= 1)
+            {
+                *out = r1;
+                ++count;
+            }
+            if (0 <= r2 && r2 <= 1)
+            {
+                *(out + count) = r2;
+                ++count;
+            }
             return count;
         }
 
         // Apply fast method, if possible, and resort to eigenvalue method if it fails
         int count = bernsteinUnitIntervalRealRoots_fast(alpha, P, out);
+        for (int k = 0; k < P; ++k)
+        {
+            std::cout << "roots[k] " << out[k] << std::endl;
+        }
         if (count >= 0)
             return count;
         return bernsteinUnitIntervalRealRoots_eigenvalue(alpha, P, out);
     }
+    // call evalBernsteinValueandDeriv() at roots
+    // out - real and AD
+    // set real part to roots
+    // set AD using the analytical formula
+    template <typename xdouble>
+    inline int bernsteinUnitIntervalRealRoots(const xdouble *alpha, int P, xdouble *out)
+    {
+        // to call bernsteinUnitIntervalRealRoots() for double
+        std::cout << "Inside bernsteinUnitIntervalRealRoots( ) adept " << std::endl;
+        real *pline, *roots;
+        algoim_spark_alloc(real, &pline, P, &roots, P - 1);
+        for (int i = 0; i < P; ++i)
+        {
+            pline[i] = alpha[i].rpart();
+            // std::cout << "poly coeffs: " << alpha[i].rpart() << std::endl;
+            std::cout << "poly coeffs: " << alpha[i] << std::endl;
+        }
+        int count = bernsteinUnitIntervalRealRoots(pline, P, roots);
+        for (int k = 0; k < P; ++k)
+        {
+            *(out + k) = roots[k];
+        }
+        /// P(x; a) = \sum_{i=0}^P B_i(x) a_i;
+        /// P(r; a) = 0.0;
+        /// dPda|_{x=r} adot + dPdx|_{x=r} (DrDa adot) = 0.0
+        /// DrDa adot = - dPda|_{x=r} adot/ dPdx|_{x=r}
+        const real *binom = Binomial::row(P - 1);
+        xdouble out_value;
+        xdouble out_AD;
+        for (int k = 0; k < P; ++k)
+        {
+            bernsteinValueAndDerivative(alpha, P, binom, out[k].rpart(), out_value, out_AD);
+            real numer = -out_value.dpart();
+            real denom = out_AD.rpart();
+            out[k].dpart(numer / denom);
+        }
+        for (int k = 0; k < P; ++k)
+        {
+            std::cout << "out[k] " << out[k] << std::endl;
+        }
+        return count;
+    }
 
     // Build Sylvester matrix for Bernstein polynomials of degrees P-1 and Q-1
     //   out: square matrix of dimensions P + Q - 2
-    inline void sylvesterMatrix(const real* a, int P, const real* b, int Q, xarray<real,2>& out)
+    inline void sylvesterMatrix(const real *a, int P, const real *b, int Q, xarray<real, 2> &out)
     {
         assert(P >= 1 && Q >= 1 && P + Q >= 3 && out.ext(0) == P + Q - 2 && out.ext(1) == P + Q - 2);
-        const real* bP = Binomial::row(P - 1);
-        const real* bQ = Binomial::row(Q - 1);
-        const real* bPQ = Binomial::row(P + Q - 3);
+        const real *bP = Binomial::row(P - 1);
+        const real *bQ = Binomial::row(Q - 1);
+        const real *bPQ = Binomial::row(P + Q - 3);
         out = 0;
         for (int i = 0; i < Q - 1; ++i)
             for (int j = 0; j < P; ++j)
-                out(i,j+i) = a[j] * (bP[j] / bPQ[j + i]);
+                out(i, j + i) = a[j] * (bP[j] / bPQ[j + i]);
         for (int i = 0; i < P - 1; ++i)
             for (int j = 0; j < Q; ++j)
-                out(i+Q-1,j+i) = b[j] * (bQ[j] / bPQ[j + i]);
+                out(i + Q - 1, j + i) = b[j] * (bQ[j] / bPQ[j + i]);
     }
 
     // Build Bezout matrix for Bernstein polynomials of equal degree P-1
     //   out: square matrix of dimensions P - 1
-    inline void bezoutMatrix(const real* a, const real* b, int P, xarray<real,2>& out)
+    inline void bezoutMatrix(const real *a, const real *b, int P, xarray<real, 2> &out)
     {
         assert(P >= 2 && out.ext(0) == P - 1 && out.ext(1) == P - 1);
         const int n = P - 1;
         out = 0;
         for (int i = 1; i <= n; ++i)
-            out(i-1,0) = (a[i] * b[0] - a[0] * b[i]) * real(n) / real(i);
+            out(i - 1, 0) = (a[i] * b[0] - a[0] * b[i]) * real(n) / real(i);
         for (int j = 1; j <= n - 1; ++j)
-            out(n-1,j) = (a[n] * b[j] - a[j] * b[n]) * real(n) / real(n - j);
+            out(n - 1, j) = (a[n] * b[j] - a[j] * b[n]) * real(n) / real(n - j);
         for (int i = n - 1; i >= 1; --i)
             for (int j = 1; j <= i - 1; ++j)
-                out(i-1,j) = (a[i] * b[j] - a[j] * b[i]) * real(n*n) / real(i*(n - j)) + out(i,j-1) * real(j*(n-i)) / real(i*(n-j));
+                out(i - 1, j) = (a[i] * b[j] - a[j] * b[i]) * real(n * n) / real(i * (n - j)) + out(i, j - 1) * real(j * (n - i)) / real(i * (n - j));
         for (int i = 0; i < n; ++i)
             for (int j = i + 1; j < n; ++j)
-                out(i,j) = out(j,i);
+                out(i, j) = out(j, i);
     }
 } // namespace algoim::bernstein
 

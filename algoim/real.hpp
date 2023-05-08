@@ -1,7 +1,6 @@
 #ifndef ALGOIM_REAL_HPP
 #define ALGOIM_REAL_HPP
-#include "adept.h"
-using adept::adouble;
+#include "duals/dual"
 // Header file for defining algoim::real; by default, algoim::real is a typedef for double.
 // High precision arithmetic can be used with Algoim by redefining algoim::real as another
 // type (e.g., the quadruple-double type qd_real as provided by the QD library). Additional
@@ -12,7 +11,9 @@ using adept::adouble;
 namespace algoim
 {
     // typedef for algoim::real
+    // adept::Stack stack;
     using real = double;
+    using duals::duald;
 } // namespace algoim
 
 #endif

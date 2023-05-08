@@ -10,7 +10,7 @@ namespace algoim
 {
     // PolySet implements a simple container to hold one or more Bernstein polynomials
     // and their associated masks
-    template<int N, int E>
+    template<typename xdouble, int N, int E>
     struct PolySet
     {
         struct Poly
@@ -19,14 +19,14 @@ namespace algoim
             size_t offset;                  // Offset into buffer, storing the xarray<Real,N> polynomial data
             booluarray<N,E> mask;           // Mask
         };
-        std::vector<real> buff;             // Memory buffer containing polynomial data
+        std::vector<xdouble> buff;             // Memory buffer containing polynomial data
         std::vector<Poly> items;            // Record of contained polynomials
 
         // Access polynomial by index
-        xarray<real,N> poly(size_t ind)
+        xarray<xdouble, N> poly(size_t ind)
         {
             assert(0 <= ind && ind < items.size());
-            return xarray<real,N>(&buff[items[ind].offset], items[ind].ext);
+            return xarray<xdouble,N>(&buff[items[ind].offset], items[ind].ext);
         }
 
         // Access mask by index
@@ -37,7 +37,7 @@ namespace algoim
         }
 
         // Add a polynomial/mask pair to the container
-        void push_back(const xarray<real,N>& p, const booluarray<N,E>& m)
+        void push_back(const xarray<xdouble,N>& p, const booluarray<N,E>& m)
         {
             items.push_back({p.ext(), buff.size(), m});
             buff.resize(buff.size() + p.size());
