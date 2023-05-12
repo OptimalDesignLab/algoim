@@ -14,6 +14,8 @@ namespace algoim
     // adept::Stack stack;
     using real = double;
     using duals::duald;
+    using namespace duals;
+    using namespace duals::literals;
 } // namespace algoim
 
 #endif

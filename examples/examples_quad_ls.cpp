@@ -147,12 +147,12 @@ void outputQuadScheme(const F &fphi, real xmin, real xmax, const uvector<int, N>
     // Construct phi by mapping [0,1] onto bounding box [xmin,xmax]
     xarray<real, N> phi(nullptr, P);
     algoim_spark_alloc(real, phi);
-    bernstein::bernsteinInterpolate<N>([&](const uvector<real, N> &x)
+    bernstein::bernsteinInterpolate<real, N>([&](const uvector<real, N> &x)
                                        { return fphi(xmin + x * (xmax - xmin)); },
                                        phi);
 
     // Build quadrature hierarchy
-    ImplicitPolyQuadrature<N> ipquad(phi);
+    ImplicitPolyQuadrature<real, N> ipquad(phi);
     // ipquad.type = OuterAggregate;
     // Compute quadrature scheme and record the nodes & weights; phase0 corresponds to
     // {phi < 0}, phase1 corresponds to {phi > 0}, and surf corresponds to {phi == 0}.
@@ -190,11 +190,11 @@ void GetQuadScheme(const F &fphi, uvector<real, N> xmin, uvector<real, N> xmax, 
     // Construct phi by mapping [0,1] onto bounding box [xmin,xmax]
     xarray<real, N> phi(nullptr, P);
     algoim_spark_alloc(real, phi);
-    bernstein::bernsteinInterpolate<N>([&](const uvector<real, N> &x)
+    bernstein::bernsteinInterpolate<real, N>([&](const uvector<real, N> &x)
                                        { return fphi(xmin + x * (xmax - xmin)); },
                                        phi);
     // Build quadrature hierarchy
-    ImplicitPolyQuadrature<2> ipquad(phi);
+    ImplicitPolyQuadrature<real, 2> ipquad(phi);
     // ipquad.type = OuterAggregate;
     // Compute quadrature scheme and record the nodes & weights; phase0 corresponds to
     // {phi < 0}, phase1 corresponds to {phi > 0}, and surf corresponds to {phi == 0}.
@@ -204,7 +204,7 @@ void GetQuadScheme(const F &fphi, uvector<real, N> xmin, uvector<real, N> xmax, 
             phase0.push_back(add_component(x, N, w));
         else
             phase1.push_back(add_component(x, N, w)); });
-    ipquad.integrate_surf(AlwaysGL, q, [&](const uvector<real, N> &x, real w, const uvector<real, N> &wn)
+    ipquad.integrate_surf(AutoMixed, q, [&](const uvector<real, N> &x, real w, const uvector<real, N> &wn)
                           { surf.push_back(add_component(x, N, w)); });
 }
 
@@ -218,12 +218,12 @@ void qConv(const Phi &phi, real xmin, real xmax, uvector<int, N> P, const F &int
     // Construct Bernstein polynomial by mapping [0,1] onto bounding box [xmin,xmax]
     xarray<real, N> phipoly(nullptr, P);
     algoim_spark_alloc(real, phipoly);
-    bernstein::bernsteinInterpolate<N>([&](const uvector<real, N> &x)
+    bernstein::bernsteinInterpolate<real, N>([&](const uvector<real, N> &x)
                                        { return phi(xmin + x * (xmax - xmin)); },
                                        phipoly);
 
     // Build quadrature hierarchy
-    ImplicitPolyQuadrature<N> ipquad(phipoly);
+    ImplicitPolyQuadrature<real, N> ipquad(phipoly);
 
     // Functional to evaluate volume and surface integrals of given integrand
     real volume, surf;
@@ -257,12 +257,12 @@ void qAreaPeri(const Phi &phi, uvector<real, N> xmin, uvector<real, N> xmax, uve
     // Construct Bernstein polynomial by mapping [0,1] onto bounding box [xmin,xmax]
     xarray<real, N> phipoly(nullptr, P);
     algoim_spark_alloc(real, phipoly);
-    bernstein::bernsteinInterpolate<N>([&](const uvector<real, N> &x)
+    bernstein::bernsteinInterpolate<real, N>([&](const uvector<real, N> &x)
                                        { return phi(xmin + x * (xmax - xmin)); },
                                        phipoly);
 
     // Build quadrature hierarchy
-    ImplicitPolyQuadrature<N> ipquad(phipoly);
+    ImplicitPolyQuadrature<real, N> ipquad(phipoly);
 
     // Functional to evaluate volume and surface integrals of given integrand
     auto compute = [&](int q)
@@ -521,12 +521,12 @@ void GetFaceQuadSchemeX(uvector<real, N> xp, uvector<real, N> ymin, uvector<real
     // bernstein::bernsteinInterpolate<N>([&](const uvector<real, N> &x)
     //                                    { return fphi(ymin + x * (ymax - ymin)); },
     //                                    phi);
-    bernstein::bernsteinInterpolate<N>([&](const uvector<real, N> &x)
+    bernstein::bernsteinInterpolate<real, N>([&](const uvector<real, N> &x)
                                        { return airfoil_phi(ymin + x * (ymax - ymin)); },
                                        phi);
     std::cout << "building quadrature hierarchy " << std::endl;
     // Build quadrature hierarchy
-    ImplicitPolyQuadrature<N> ipquad(phi);
+    ImplicitPolyQuadrature<real, N> ipquad(phi);
     // ipquad.type = OuterAggregate;
     // Compute quadrature scheme and record the nodes & weights; phase0 corresponds to
     // {phi < 0}, phase1 corresponds to {phi > 0}, and surf corresponds to {phi == 0}.
@@ -772,12 +772,12 @@ void GetFaceQuadSchemeY(uvector<real, N> xp, uvector<real, N> ymin, uvector<real
     // bernstein::bernsteinInterpolate<N>([&](const uvector<real, N> &x)
     //                                    { return fphi(ymin + x * (ymax - ymin)); },
     //                                    phi);
-    bernstein::bernsteinInterpolate<N>([&](const uvector<real, N> &x)
+    bernstein::bernsteinInterpolate<real, N>([&](const uvector<real, N> &x)
                                        { return airfoil_phi(ymin + x * (ymax - ymin)); },
                                        phi);
     std::cout << "building quadrature hierarchy " << std::endl;
     // Build quadrature hierarchy
-    ImplicitPolyQuadrature<N> ipquad(phi);
+    ImplicitPolyQuadrature<real, N> ipquad(phi);
     // ipquad.type = OuterAggregate;
     // Compute quadrature scheme and record the nodes & weights; phase0 corresponds to
     // {phi < 0}, phase1 corresponds to {phi > 0}, and surf corresponds to {phi == 0}.
@@ -863,7 +863,7 @@ int main(int argc, char *argv[])
         outputQuadratureRuleAsVtpXML<N>(surf_all, "ellipse-surf.vtp");
     }
 #endif
-#if 0
+#if 1
      // q-convergence study for a 2D circle
     {
         auto circle = [](const uvector<real, 2> &x)
@@ -898,7 +898,7 @@ int main(int argc, char *argv[])
                 xmin(1) = -2.1 + j * dx;
                 xmax(0) = -2.1 + i * dx + dx;
                 xmax(1) = -2.1 + j * dx + dx;
-                GetQuadScheme<2>(circle, xmin, xmax, 3, 10, surf, phase0, phase1);
+                GetQuadScheme<2>(circle, xmin, xmax, 8, 10, surf, phase0, phase1);
                 qAreaPeri<2>(circle, xmin, xmax, 3, integrand, 10, volume_exact, surf_exact, area_c, peri_c);
                 // std::cout << "area: " << area_c << std::endl;
                 // std::cout << "perimeter : " << peri_c << std::endl;
@@ -1005,6 +1005,7 @@ int main(int argc, char *argv[])
         outputQuadratureRuleAsVtpXML<N + 1>(phaseY_all, "circle-phaseY.vtp");
     }
 #endif
+#if 0
     // q-convergence study for an airfoil
     {
         auto airfoil_phi = [](const uvector<real, 2> &xs)
@@ -1206,6 +1207,7 @@ int main(int argc, char *argv[])
         outputQuadratureRuleAsVtpXML<N + 1>(phaseY_all, "airfoil-phaseY.vtp");
         outputQuadratureRuleAsVtpXML<N + 1>(surf_all, "airfoil-surf.vtp");
     }
+#endif
 #if 0
     std::cout << "Algoim Examples - High-order quadrature algorithms for multi-component domains implicitly-defined\n";
     std::cout << "by (one or more) multivariate Bernstein polynomials\n\n";

@@ -94,8 +94,8 @@ namespace algoim
         // guaranteed that f and/or g were originally masked off at the same place, or that they
         // definitively do not share common zeros in that subrectangle; if the returned mask is true,
         // then shared zeros may exist (and with high likelihood)
-        template <int N>
-        booluarray<N, ALGOIM_M> intersectionMask(const xarray<real, N> &f, const booluarray<N, ALGOIM_M> &fmask, const xarray<real, N> &g, const booluarray<N, ALGOIM_M> &gmask)
+        template <typename xdouble, int N>
+        booluarray<N, ALGOIM_M> intersectionMask(const xarray<xdouble, N> &f, const booluarray<N, ALGOIM_M> &fmask, const xarray<xdouble, N> &g, const booluarray<N, ALGOIM_M> &gmask)
         {
             return mask_driver(f, fmask, &g, &gmask);
         }
@@ -130,29 +130,50 @@ namespace algoim
 
         // Test if a point x \in [0,1]^N is in a true subrectangle of a mask; if x is exactly
         // on the border between two subrectangles, the left subrectangle shall be used
-        template <int N>
-        bool pointWithinMask(const booluarray<N, ALGOIM_M> &mask, const uvector<real, N> &x)
+        template <typename xdouble, int N>
+        bool pointWithinMask(const booluarray<N, ALGOIM_M> &mask, const uvector<xdouble, N> &x)
         {
             using std::floor;
             uvector<int, N> cell;
             for (int dim = 0; dim < N; ++dim)
-                cell(dim) = std::max(0, std::min(ALGOIM_M - 1, static_cast<int>(floor(x(dim) * ALGOIM_M))));
+            {
+                if constexpr (std::is_same_v<double, xdouble>)
+                {
+                    cell(dim) = std::max(0, std::min(ALGOIM_M - 1, static_cast<int>(floor(x(dim) * ALGOIM_M))));
+                }
+                else
+                {
+                    cell(dim) = std::max(0, std::min(ALGOIM_M - 1, static_cast<int>(floor(x(dim).rpart() * ALGOIM_M))));
+                }
+            }
+
             return mask(cell);
         }
 
         // Test if a point {x + alpha e_k} is in a true subrectangle of a mask for some alpha \in [0,1]
-        template <int N>
-        bool lineIntersectsMask(const booluarray<N, ALGOIM_M> &mask, const uvector<real, N - 1> &x, int k)
+        template <typename xdouble, int N>
+        bool lineIntersectsMask(const booluarray<N, ALGOIM_M> &mask, const uvector<xdouble, N - 1> &x, int k)
         {
             using std::floor;
             if constexpr (N > 1)
             {
                 uvector<int, N> cell;
-                for (int dim = 0; dim < N; ++dim)
-                    if (dim < k)
-                        cell(dim) = std::max(0, std::min(ALGOIM_M - 1, static_cast<int>(floor(x(dim) * ALGOIM_M))));
-                    else if (dim > k)
-                        cell(dim) = std::max(0, std::min(ALGOIM_M - 1, static_cast<int>(floor(x(dim - 1) * ALGOIM_M))));
+                if constexpr (std::is_same_v<double, xdouble>)
+                {
+                    for (int dim = 0; dim < N; ++dim)
+                        if (dim < k)
+                            cell(dim) = std::max(0, std::min(ALGOIM_M - 1, static_cast<int>(floor(x(dim) * ALGOIM_M))));
+                        else if (dim > k)
+                            cell(dim) = std::max(0, std::min(ALGOIM_M - 1, static_cast<int>(floor(x(dim - 1) * ALGOIM_M))));
+                }
+                else
+                {
+                    for (int dim = 0; dim < N; ++dim)
+                        if (dim < k)
+                            cell(dim) = std::max(0, std::min(ALGOIM_M - 1, static_cast<int>(floor(x(dim).rpart() * ALGOIM_M))));
+                        else if (dim > k)
+                            cell(dim) = std::max(0, std::min(ALGOIM_M - 1, static_cast<int>(floor(x(dim - 1).rpart() * ALGOIM_M))));
+                }
                 for (int i = 0; i < ALGOIM_M; ++i)
                 {
                     cell(k) = i;
@@ -165,8 +186,8 @@ namespace algoim
                 return !maskEmpty(mask);
         }
 
-        template <int N>
-        void restrictToFace(const xarray<real, N> &a, int k, int side, xarray<real, N - 1> &out)
+        template <typename xdouble, int N>
+        void restrictToFace(const xarray<xdouble, N> &a, int k, int side, xarray<xdouble, N - 1> &out)
         {
             assert(0 <= k && k < N && (side == 0 || side == 1));
             assert(all(out.ext() == remove_component(a.ext(), k)));
@@ -282,8 +303,8 @@ namespace algoim
         // among various other aspects. If your application requires this kind of special handling,
         // consider contacting the author of this code for suggestions.
         // ========================================= NOTE =========================================
-        template <int N>
-        bool resultant_core(const xarray<real, N> &p, const xarray<real, N> *q, int k, xarray<real, N - 1> &out)
+        template <typename xdouble, int N>
+        bool resultant_core(const xarray<xdouble, N> &p, const xarray<xdouble, N> *q, int k, xarray<xdouble, N - 1> &out)
         {
             assert(0 <= k && k < N);
 
@@ -292,11 +313,11 @@ namespace algoim
             int M = (P == Q) ? P - 1 : P + Q - 2;
             assert(P >= 2 && Q >= 1 && M >= 1);
 
-            xarray<real, N - 1> f(nullptr, out.ext());
-            xarray<real, 2> mat(nullptr, uvector<int, 2>{M, M});
-            real *pk, *qk;
-            algoim_spark_alloc(real, f, mat);
-            algoim_spark_alloc(real, &pk, P, &qk, Q);
+            xarray<xdouble, N - 1> f(nullptr, out.ext());
+            xarray<xdouble, 2> mat(nullptr, uvector<int, 2>{M, M});
+            xdouble *pk, *qk;
+            algoim_spark_alloc(xdouble, f, mat);
+            algoim_spark_alloc(xdouble, &pk, P, &qk, Q);
 
             for (auto i = f.loop(); ~i; ++i)
             {
@@ -334,18 +355,18 @@ namespace algoim
         }
 
         // Compute the pseudo-resultant R(p,q) along dimension k
-        template <int N>
-        bool resultant(const xarray<real, N> &p, const xarray<real, N> &q, int k, xarray<real, N - 1> &out)
+        template <typename xdouble, int N>
+        bool resultant(const xarray<xdouble, N> &p, const xarray<xdouble, N> &q, int k, xarray<xdouble, N - 1> &out)
         {
             return resultant_core(p, &q, k, out);
         }
 
         // Compute the (intentially unnormalised) pseudo-discriminant R(p,p') along dimension k
-        template <int N>
-        bool discriminant(const xarray<real, N> &p, int k, xarray<real, N - 1> &out)
+        template <typename xdouble, int N>
+        bool discriminant(const xarray<xdouble, N> &p, int k, xarray<xdouble, N - 1> &out)
         {
-            xarray<real, N> prime(nullptr, inc_component(p.ext(), k, -1));
-            algoim_spark_alloc(real, prime);
+            xarray<xdouble, N> prime(nullptr, inc_component(p.ext(), k, -1));
+            algoim_spark_alloc(xdouble, prime);
             bernstein::bernsteinDerivative(p, k, prime);
             return resultant_core(p, &prime, k, out);
         }
@@ -368,8 +389,8 @@ namespace algoim
                 // Examine bottom and top faces in the k'th dimension
                 for (int side = 0; side <= 1; ++side)
                 {
-                    xarray<real, N - 1> p_face(nullptr, remove_component(p.ext(), k));
-                    algoim_spark_alloc(real, p_face);
+                    xarray<xdouble, N - 1> p_face(nullptr, remove_component(p.ext(), k));
+                    algoim_spark_alloc(xdouble, p_face);
                     restrictToFace(p, k, side, p_face);
                     auto p_face_mask = nonzeroMask(p_face, restrictToFace(mask, k, side));
                     if (!maskEmpty(p_face_mask))
@@ -381,16 +402,16 @@ namespace algoim
                 }
 
                 // Consider discriminant
-                xarray<real, N> p_k(nullptr, p.ext());
-                algoim_spark_alloc(real, p_k);
-                bernstein::elevatedDerivative(p, k, p_k);
+                xarray<xdouble, N> p_k(nullptr, p.ext());
+                algoim_spark_alloc(xdouble, p_k);
+                bernstein::elevatedDerivative<xdouble>(p, k, p_k);
                 auto disc_mask = intersectionMask(p, mask, p_k, mask);
                 if (!maskEmpty(disc_mask))
                 {
                     // note: computed disc might have lower degree than the following
                     uvector<int, N - 1> R = discriminantExtent(p.ext(), k);
-                    xarray<real, N - 1> disc(nullptr, R);
-                    algoim_spark_alloc(real, disc);
+                    xarray<xdouble, N - 1> disc(nullptr, R);
+                    algoim_spark_alloc(xdouble, disc);
                     if (discriminant(p, k, disc))
                     {
                         bernstein::normalise(disc);
@@ -412,8 +433,8 @@ namespace algoim
                     {
                         // note: computed resultant might have lower degree than the following
                         uvector<int, N - 1> R = resultantExtent(p.ext(), q.ext(), k);
-                        xarray<real, N - 1> res(nullptr, R);
-                        algoim_spark_alloc(real, res);
+                        xarray<xdouble, N - 1> res(nullptr, R);
+                        algoim_spark_alloc(xdouble, res);
                         if (resultant(p, q, k, res))
                         {
                             bernstein::normalise(res);
@@ -425,11 +446,11 @@ namespace algoim
 
         // Compute the 'score' across all dimensions
         template <typename xdouble, int N>
-        uvector<real, N> score_estimate(PolySet<xdouble, N, ALGOIM_M> &phi, uvector<bool, N> &disc)
+        uvector<xdouble, N> score_estimate(PolySet<xdouble, N, ALGOIM_M> &phi, uvector<bool, N> &disc)
         {
             static_assert(N > 1, "score_estimate of practical use only with N > 1");
             using std::abs;
-            uvector<real, N> s = 0;
+            uvector<xdouble, N> s = 0;
             // For every phi(i) ...
             for (int i = 0; i < phi.count(); ++i)
             {
@@ -440,24 +461,26 @@ namespace algoim
                 for (MultiLoop<N> j(0, ALGOIM_M); ~j; ++j)
                     if (mask(j()))
                     {
-                        uvector<real, N> x = (j() + 0.5) / real(ALGOIM_M);
-                        uvector<real, N> g = bernstein::evalBernsteinPolyGradient(p, x);
-                        real sum = 0;
+                        uvector<xdouble, N> x = (j() + 0.5) / xdouble(ALGOIM_M);
+                        uvector<xdouble, N> g = bernstein::evalBernsteinPolyGradient(p, x);
+                        xdouble sum = 0;
                         for (int dim = 0; dim < N; ++dim)
                         {
-                            g(dim) = abs(g(dim));
+                            g(dim) = fabs(g(dim));
                             sum += g(dim);
                         }
                         if (sum > 0)
+                        {
                             s += g / sum;
+                        }
                     }
 
                 // Consider discriminant
-                xarray<real, N> p_k(nullptr, p.ext());
-                algoim_spark_alloc(real, p_k);
+                xarray<xdouble, N> p_k(nullptr, p.ext());
+                algoim_spark_alloc(xdouble, p_k);
                 for (int k = 0; k < N; ++k)
                 {
-                    bernstein::elevatedDerivative(p, k, p_k);
+                    bernstein::elevatedDerivative<xdouble>(p, k, p_k);
                     auto disc_mask = intersectionMask(p, mask, p_k, mask);
                     disc(k) = !maskEmpty(disc_mask);
                 }
@@ -517,7 +540,7 @@ namespace algoim
         // Build quadrature hierarchy for a domain implicitly defined by a single polynomial
         ImplicitPolyQuadrature(const xarray<xdouble, N> &p)
         {
-            std::cout << "Inside ImplicitPolyQuadrature () " << std::endl;
+            // std::cout << "Inside ImplicitPolyQuadrature () " << std::endl;
             auto mask = detail::nonzeroMask(p, booluarray<N, ALGOIM_M>(true));
             if (!detail::maskEmpty(mask))
                 phi.push_back(p, mask);
@@ -559,6 +582,7 @@ namespace algoim
         // Assuming phi has been instantiated, determine elimination axis and build base
         void build(bool outer, bool auto_apply_TS)
         {
+            // std::cout << "Inside build() " << std::endl;
             type = outer ? OuterSingle : Inner;
             this->auto_apply_TS = auto_apply_TS;
 
@@ -581,17 +605,29 @@ namespace algoim
             {
                 // Compute score; penalise any directions which likely contain vertical tangents
                 uvector<bool, N> has_disc;
-                uvector<real, N> score = detail::score_estimate(phi, has_disc);
+                uvector<xdouble, N> score = detail::score_estimate(phi, has_disc);
+                // for (int dim = 0; dim < N; ++dim)
+                // {
+                //     std::cout << "score( " << dim << "): " << score(dim) << std::endl;
+                //     std::cout << "abs(score" << dim << "): " << fabs(score(dim)) << std::endl;
+                // }
+                // std::cout << "max(score) " << max(abs(score)) << std::endl;
+                // if constexpr (std::is_same_v<double, xdouble>)
+                // {
                 assert(max(abs(score)) > 0);
                 score /= 2 * max(abs(score));
                 for (int i = 0; i < N; ++i)
                     if (!has_disc(i))
                         score(i) += 1.0;
-
+                // for (int i = 0; i < N; ++i)
+                // {
+                //     std::cout << "score(" << i << "): " << score(i) << std::endl;
+                // }
                 // Choose height direction and form base polynomials; if tanh-sinh is being used at this
                 // level, suggest the same all the way down; moreover, suggest tanh-sinh if a non-empty
                 // discriminant mask has been found
                 k = argmax(score);
+                // std::cout << "max score, k = " << k << std::endl;
                 detail::eliminate_axis(phi, k, base.phi);
                 base.build(false, this->auto_apply_TS || has_disc(k));
 
@@ -645,11 +681,11 @@ namespace algoim
                 max_count += phi.poly(i).ext(k) - 1;
 
             // Base integral invokes the following integrand
-            auto integrand = [&](const uvector<real, N - 1> &xbase, real w)
+            auto integrand = [&](const uvector<xdouble, N - 1> &xbase, xdouble w)
             {
                 // Allocate node buffer of sufficient size and initialise with {0, 1}
-                std::cout << "Inside integrand() " << std::endl;
-                std::cout << "k " << k << std::endl;
+                // std::cout << "Inside integrand() " << std::endl;
+                // std::cout << "k " << k << std::endl;
 
                 // real *nodes;
                 // algoim_spark_alloc(real, &nodes, max_count);
@@ -672,7 +708,7 @@ namespace algoim
                     // Restrict polynomial to axis-aligned line and compute its roots
                     xdouble *pline, *roots;
                     algoim_spark_alloc(xdouble, &pline, P, &roots, P - 1);
-                    bernstein::collapseAlongAxis(p, xbase, k, pline);
+                    bernstein::collapseAlongAxisDual(p, xbase, k, pline);
                     int rcount;
                     if constexpr (std::is_same_v<double, xdouble>)
                     {
@@ -681,30 +717,30 @@ namespace algoim
                     else
                     {
                         rcount = bernstein::bernsteinUnitIntervalRealRoots<xdouble>(pline, P, roots);
-                        std::cout << "final roots: " << std::endl;
-                        for (int ir = 0; ir < P; ++ir)
-                        {
-                            std::cout << roots[ir] << std::endl;
-                        }
+                        // std::cout << "final roots: " << std::endl;
+                        // for (int ir = 0; ir < P; ++ir)
+                        // {
+                        //     std::cout << roots[ir] << std::endl;
+                        // }
                     }
 
                     // Add all real roots in [0,1] which are also within masked region of phi
                     for (int j = 0; j < rcount; ++j)
                     {
-                        if constexpr (std::is_same_v<double, xdouble>)
-                        {
-                            auto x = add_component(xbase, k, roots[j]);
-                            if (detail::pointWithinMask(mask, x))
-                                nodes[count++] = roots[j];
-                        }
-                        else
-                        {
-                            auto x = add_component(xbase, k, roots[j].rpart());
-                            // std::cout << "xbase: " << xbase(0) << std::endl;
-                            if (detail::pointWithinMask(mask, x))
-                                // nodes[count++] = roots[j].rpart();
-                                nodes[count++] = roots[j];
-                        }
+                        // if constexpr (std::is_same_v<double, xdouble>)
+                        // {
+                        auto x = add_component(xbase, k, roots[j]);
+                        if (detail::pointWithinMask(mask, x))
+                            nodes[count++] = roots[j];
+                        // }
+                        // else
+                        // {
+                        //     auto x = add_component(xbase, k, roots[j].rpart());
+                        //     // std::cout << "xbase: " << xbase(0) << std::endl;
+                        //     if (detail::pointWithinMask(mask, x))
+                        //         // nodes[count++] = roots[j].rpart();
+                        //         nodes[count++] = roots[j];
+                        // }
                     }
                 };
 
@@ -751,15 +787,17 @@ namespace algoim
                     else
                         for (int j = 0; j < q; ++j)
                         {
-                            if constexpr (std::is_same_v<double, xdouble>)
-                            {
-                                f(add_component(xbase, k, TanhSinhQuadrature::x(q, j, x0, x1)), w * TanhSinhQuadrature::w(q, j, x0, x1));
-                            }
-                            else
-                            {
-                                xdouble xq = TanhSinhQuadrature::x(q, j, x0.rpart(), x1.rpart());
-                                f(xq, w * TanhSinhQuadrature::w(q, j, x0.rpart(), x1.rpart()));
-                            }
+                            // if constexpr (std::is_same_v<double, xdouble>)
+                            // {
+                            f(add_component(xbase, k, TanhSinhQuadrature<xdouble>::x(q, j, x0, x1)), w * TanhSinhQuadrature<xdouble>::w(q, j, x0, x1));
+                            // }
+                            // else
+                            // {
+                            //     xdouble xq = TanhSinhQuadrature::x(q, j, x0.rpart(), x1.rpart());
+                            //     f(add_component(xbase, k, xq ), w * TanhSinhQuadrature::w(q, j, x0.rpart(), x1.rpart()));
+                            //     // xdouble xq = TanhSinhQuadrature::x(q, j, x0.rpart(), x1.rpart());
+                            //     // f(xq, w * TanhSinhQuadrature::w(q, j, x0.rpart(), x1.rpart()));
+                            // }
                         }
                 }
             };
@@ -768,7 +806,7 @@ namespace algoim
             if constexpr (N > 1)
                 base.integrate(strategy, q, integrand);
             else
-                integrand(uvector<real, 0>(), real(1));
+                integrand(uvector<xdouble, 0>(), xdouble(1));
         }
 
         // Surface-integrate a functional via quadrature of the base integral, adding the dimension k
@@ -784,8 +822,12 @@ namespace algoim
 
             // Base integral invokes the following integrand which operates in the height direction k_active
             int k_active = -1;
-            auto integrand = [&](const uvector<real, N - 1> &xbase, real w)
+            auto integrand = [&](const uvector<xdouble, N - 1> &xbase, xdouble w)
             {
+                // Allocate node buffer of sufficient size and initialise with {0, 1}
+                // std::cout << "Inside integrand() integrate_surf " << std::endl;
+                // std::cout << "k " << k << std::endl;
+
                 assert(0 <= k_active && k_active < N);
                 // For every phi(i) ...
                 for (size_t i = 0; i < phi.count(); ++i)
@@ -799,44 +841,69 @@ namespace algoim
                         continue;
 
                     // Compute roots of { x \mapsto phi(xbase + x e_k) }
-                    real *pline, *roots;
-                    algoim_spark_alloc(real, &pline, P, &roots, P - 1);
-                    bernstein::collapseAlongAxis(p, xbase, k_active, pline);
-                    int rcount = bernstein::bernsteinUnitIntervalRealRoots(pline, P, roots);
+                    xdouble *pline, *roots;
+                    algoim_spark_alloc(xdouble, &pline, P, &roots, P - 1);
+                    bernstein::collapseAlongAxisDual(p, xbase, k_active, pline);
+                    int rcount;
+                    if constexpr (std::is_same_v<double, xdouble>)
+                    {
+                        rcount = bernstein::bernsteinUnitIntervalRealRoots(pline, P, roots);
+                    }
+                    else
+                    {
+                        rcount = bernstein::bernsteinUnitIntervalRealRoots<xdouble>(pline, P, roots);
+                    }
+                    // std::cout << " ========== final roots in surface integrand : =============== " << std::endl;
+                    // for (int ir = 0; ir < P; ++ir)
+                    // {
+                    //     std::cout << roots[ir] << std::endl;
+                    // }
 
                     // Consider all real roots in (0,1) which are also within masked region of phi; evaluate
                     // integrand at interfacial points, multiplying weights by the effective surface Jacobian
                     for (int j = 0; j < rcount; ++j)
                     {
+                        // std::cout << "xbase " << xbase(0) << " , " << xbase(1) << std::endl;
                         auto x = add_component(xbase, k_active, roots[j]);
+
                         if (detail::pointWithinMask(mask, x))
                         {
-                            using std::abs;
-                            uvector<real, N> g = bernstein::evalBernsteinPolyGradient(p, x);
+                            // using std::abs;
+                            // std::cout << "x: " << x << std::endl;
+                            uvector<xdouble, N> g = bernstein::evalBernsteinPolyGradient(p, x);
+                            // std::cout << "PolyGradient: " << g(0) << " , " << g(1) << std::endl;
                             if (type == OuterAggregate)
                             {
                                 // When in aggregate mode, the scalar surf integral multiplies f by |n_k|^2, whose net effect
                                 // is multiply weight by |n_k|; the flux surf integral multiplies f by sign(n_k) = sign(g(k))
-                                real alpha = max(abs(g));
+                                xdouble alpha = max(abs(g));
                                 if (alpha > 0)
                                 {
                                     g /= alpha;
-                                    alpha = abs(g(k_active)) / norm(g);
+                                    if constexpr (std::is_same_v<double, xdouble>)
+                                    {
+                                        alpha = std::abs(g(k_active)) / norm(g);
+                                    }
+                                    else
+                                    {
+                                        alpha = abs(g(k_active)) / norm(g);
+                                    }
                                 }
-                                // Simplistic method to compute sign(n_k). NOTE: This method relies on a reasonable consistency
-                                // between the gradient calculation of original polynomial, and that of the roots computed from
-                                // pline; when near high-multiplicity roots, this simple method can break down; other, more
-                                // sophisticated methods should be used in such cases, but these are not implemented here
-                                f(x, w * alpha, set_component<real, N>(real(0.0), k_active, w * util::sign(g(k_active))));
+                                // std::cout << "alpha = " << alpha << std::endl;
+                                //  Simplistic method to compute sign(n_k). NOTE: This method relies on a reasonable consistency
+                                //  between the gradient calculation of original polynomial, and that of the roots computed from
+                                //  pline; when near high-multiplicity roots, this simple method can break down; other, more
+                                //  sophisticated methods should be used in such cases, but these are not implemented here
+                                f(x, w * alpha, set_component<xdouble, N>(xdouble(0.0), k_active, w * util::sign(g(k_active))));
                             }
                             else
                             {
                                 // When in non-aggregate mode, the scalar surf integral multiples f by 1, whose net effect
                                 // is multiply weight by 1/|n_k|; the flux surf integral multiplies f by n
-                                uvector<real, N> n = g;
+                                uvector<xdouble, N> n = g;
                                 if (norm(n) > 0)
-                                    n *= real(1.0) / norm(n);
-                                real alpha = w * norm(g) / abs(g(k_active));
+                                    n *= xdouble(1.0) / norm(n);
+                                xdouble alpha = w * norm(g) / fabs(g(k_active));
                                 f(x, alpha, alpha * n);
                             }
                         }

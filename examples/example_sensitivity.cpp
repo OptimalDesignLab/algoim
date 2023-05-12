@@ -62,10 +62,10 @@ void GetCutInterfaceQuadScheme(const F &fphi,
     std::cout << "================================================================ " << std::endl;
     std::cout << "Inside GetCutInterfaceQuadScheme ( ) " << std::endl;
     xarray<xdouble, N> phi_local(nullptr, P);
-    std::cout << "created phi_local " << std::endl;
+    // std::cout << "created phi_local " << std::endl;
     algoim_spark_alloc(xdouble, phi_local);
-    std::cout << "allocated phi_local " << std::endl;
-    std::cout << "before interpolation " << std::endl;
+    // std::cout << "allocated phi_local " << std::endl;
+    // std::cout << "before interpolation " << std::endl;
     bernstein::bernsteinInterpolate<xdouble, N>(
         [&](const uvector<real, N> &x)
         { return fphi(xmin + x * (xmax - xmin)); },
@@ -75,79 +75,144 @@ void GetCutInterfaceQuadScheme(const F &fphi,
     {
         std::cout << "phi_local[" << k << "]: " << phi_local[k] << std::endl;
     }
-    std::cout << "interpolation is done !! " << std::endl;
+    //std::cout << "interpolation is done !! " << std::endl;
     // Build quadrature hierarchy
     ImplicitPolyQuadrature<xdouble, N> ipquad(phi_local);
     // Compute quadrature scheme and record the nodes & weights; phase0
     // corresponds to {phi_local < 0}
-    ipquad.integrate(AlwaysGL,
+    ipquad.integrate(AutoMixed,
                      q,
                      [&](const uvector<xdouble, N> &x, xdouble w)
                      {
                          if (bernstein::evalBernsteinPoly(phi_local, x) < 0)
                          {
-                             for (int dim = 0; dim < N; ++dim)
-                             {
-                                 std::cout << "x " << x(dim) << std::endl;
-                                 std::cout << "w " << w << std::endl;
-                             }
+                            //  for (int dim = 0; dim < N; ++dim)
+                            //  {
+                            //      std::cout << "x " << x(dim) << std::endl;
+                            //      std::cout << "w " << w << std::endl;
+                            //  }
                              phase0.push_back(add_component(x, N, w));
                          }
                      });
     std::cout << "quad size: " << phase0.size() << std::endl;
 };
+/// get volume and surface quadrature rule on cut elements
+template <typename xdouble, int N, typename F>
+void GetImmersedBoundaryQuadScheme(const F &fphi,
+                                   uvector<real, N> xmin,
+                                   uvector<real, N> xmax,
+                                   const uvector<int, N> &P,
+                                   int q,
+                                   std::vector<uvector<xdouble, N + 1>> &surf)
+{
+    // Construct phi_local by mapping [0,1] onto bounding box [xmin,xmax]
+    //
+    std::cout << "Inside GetCutInterfaceQuadScheme ( ) " << std::endl;
+    xarray<xdouble, N> phi_local(nullptr, P);
+    std::cout << "created phi_local " << std::endl;
+    algoim_spark_alloc(xdouble, phi_local);
+    std::cout << "allocated phi_local " << std::endl;
+    std::cout << "before interpolation " << std::endl;
+    bernstein::bernsteinInterpolate<xdouble, N>(
+        [&](const uvector<real, N> &x)
+        { return fphi(xmin + x * (xmax - xmin)); },
+        phi_local);
 
+    // for (int k = 0; k < P(0); ++k)
+    // {
+    //     std::cout << "phi_local[" << k << "]: " << phi_local[k] << std::endl;
+    // }
+    // std::cout << "interpolation is done !! " << std::endl;
+    // Build quadrature hierarchy
+    ImplicitPolyQuadrature<xdouble, N> ipquad(phi_local);
+    // Compute quadrature scheme and record the nodes & weights; phase0
+    // corresponds to {phi_local < 0}
+    ipquad.integrate_surf(AutoMixed, q,
+                          [&](const uvector<xdouble, N> &x, xdouble w, const uvector<xdouble, N> &wn)
+                          {
+                              surf.push_back(add_component(x, N, w));
+                          });
+    std::cout << "surface quad size: " << surf.size() << std::endl;
+    std::cout << "================================================================ " << std::endl;
+};
 /// get volume and surface quadrature rule on cut elements
 template <typename xdouble, int N>
 void computeDesignSensitivity(xdouble r_a, xdouble *w_a, xdouble *x_a)
 {
-    // declare active input variable/s
-    // duald r_a = r + 1_e;
-    std::cout << "r_a " << r_a << std::endl;
     auto circle = [&](const uvector<xdouble, 2> &x)
     {
         return x(0) * x(0) + x(1) * x(1) - r_a * r_a;
     };
     std::cout << "r = " << r_a << std::endl;
     /// bounding box/line
+    uvector<real, N> xmin_face;
+    uvector<real, N> xmax_face;
+    xmin_face(0) = 1.05;
+    xmin_face(1) = 0.0;
+    xmax_face(0) = 2.1;
+    xmax_face(1) = 0.0;
+    /// bounding box (immersed surface)
     uvector<real, N> xmin;
     uvector<real, N> xmax;
-    xmin(0) = 1.05;
-    xmin(1) = 0.0;
+    xmin(0) = -2.1;
+    xmin(1) = -2.1;
     xmax(0) = 2.1;
-    xmax(1) = 0.0;
+    xmax(1) = 2.1;
     /// general level-set function restricted to 1-D
-    auto LSF = [&](const uvector<real, 1> &x)
+    auto levelSetFace = [&](const uvector<real, 1> &x)
     {
         uvector<xdouble, N> xs;
         xs(0) = x(0);
-        xs(1) = xmax(1);
+        xs(1) = xmax_face(1);
+        xdouble y = circle(xs);
+        return y;
+    };
+    /// general level-set function restricted to 1-D
+    auto LSF = [&](const uvector<real, 2> &x)
+    {
+        uvector<xdouble, N> xs;
+        xs(0) = x(0);
+        xs(1) = x(1);
         xdouble y = circle(xs);
         return y;
     };
     uvector<real, N - 1> xs;
     xs(0) = 2.0;
-    std::cout << "LSF(x) " << LSF(xs) << std::endl;
+    std::cout << "levelSetFace(x) " << levelSetFace(xs) << std::endl;
+    uvector<real, N> xsurf;
+    xsurf(0) = 2.0;
+    xsurf(1) = 0.0;
+    std::cout << "LSF(xsurf) " << LSF(xsurf) << std::endl;
     /// polynominal degree and quadrature order
-    int P = 5;
-    int q = 5;
+    int P = 3;
+    int q = 3;
     /// get the interface quadrature rule
     std::vector<uvector<xdouble, N>> qface;
-    GetCutInterfaceQuadScheme<xdouble, 1>(LSF, xmin(0), xmax(0), P, q, qface);
-    // dwdr = qface.at(1)(1);
-#if 1
-    // std::vector<xdouble> w_a(qface.size());
-    // std::vector<xdouble> x_a(qface.size());
-    // std::vector<xdouble> y_a(qface.size());
+    std::vector<uvector<xdouble, N + 1>> surf;
+    // GetCutInterfaceQuadScheme<xdouble, 1>(levelSetFace, xmin_face(0), xmax_face(0), P, q, qface);
+    GetImmersedBoundaryQuadScheme<xdouble, 2>(LSF,
+                                              xmin,
+                                              xmax,
+                                              P,
+                                              q,
+                                              surf);
+#if 0
     for (int nq = 0; nq < qface.size(); ++nq)
     {
-        std::cout << "nq " << nq << std::endl;
-        std::cout << qface.at(nq)(0) << std::endl;
+        // std::cout << "nq " << nq << std::endl;
+        // std::cout << qface.at(nq)(0) << std::endl;
         // x_a.at(nq) = qface.at(nq)(0);
         // w_a.at(nq) = qface.at(nq)(1);
         x_a[nq] = qface.at(nq)(0);
         w_a[nq] = qface.at(nq)(1);
         // std::cout << "quad x: " << x_a.at(nq) << std::endl;
+    }
+#endif
+#if 1
+    for (int nq = 0; nq < surf.size(); ++nq)
+    {
+        x_a[nq] = surf.at(nq)(0);
+        w_a[nq] = surf.at(nq)(2);
     }
 #endif
     // calculate the jacobian w.r.t state vaiables
@@ -168,6 +233,38 @@ void computeDesignSensitivity(xdouble r_a, xdouble *w_a, xdouble *x_a)
     std::cout << "************************************************************************ " << std::endl;
     outputQuadratureRuleAsVtpXML<N>(qface_all, "circle-single-interface.vtp");
 #endif
+#if 1
+    std::vector<uvector<real, N + 1>> qsurf_all;
+    std::vector<uvector<real, N + 1>> surface_quad;
+    if constexpr (std::is_same_v<double, xdouble>)
+    {
+        for (int nq = 0; nq < surf.size(); ++nq)
+        {
+            real xq = surf.at(nq)(0);
+            real yq = surf.at(nq)(1);
+            uvector<real, N + 1> surf_quad;
+            surf_quad(0) = xmin(0) + xq * (xmax(0) - xmin(0));
+            surf_quad(1) = xmin(1) + yq * (xmax(1) - xmin(1));
+            surf_quad(2) = surf.at(nq)(2);
+            surface_quad.push_back(surf_quad);
+        }
+    }
+    else
+    {
+        for (int nq = 0; nq < surf.size(); ++nq)
+        {
+            real xq = surf.at(nq)(0).rpart();
+            real yq = surf.at(nq)(1).rpart();
+            uvector<real, N + 1> surf_quad;
+            surf_quad(0) = xmin(0) + xq * (xmax(0) - xmin(0));
+            surf_quad(1) = xmin(1) + yq * (xmax(1) - xmin(1));
+            surf_quad(2) = surf.at(nq)(2).rpart();
+            surface_quad.push_back(surf_quad);
+        }
+    }
+    std::cout << "************************************************************************ " << std::endl;
+    outputQuadratureRuleAsVtpXML<N>(surface_quad, "circle-boundary.vtp");
+#endif
 }
 
 #if ALGOIM_EXAMPLES_DRIVER == 0 || ALGOIM_EXAMPLES_DRIVER == 4
@@ -176,60 +273,86 @@ int main(int argc, char *argv[])
     // real dwdr = 0.0;
     std::cout << std::setprecision(12);
     const int N = 2;
+    int qs = 12;
 #if 1
-    duald r = 2 + 1_e;
-    duald w;
-    std::vector<duald> w_a(5);
-    std::vector<duald> x_a(5);
+    duald r = 2.0 + 1_e;
+    std::vector<duald> w_a(qs);
+    std::vector<duald> x_a(qs);
     computeDesignSensitivity<duald, N>(r, w_a.data(), x_a.data());
+    //     std::cout << "+++++++++++++++++++++++++++++++++++++ " << std::endl;
+    // std::cout << "dxdr: " << std::endl;
+    // for (int k = 0; k < qs; ++k)
+    // {
+    //     std::cout << x_a.at(k).dpart() << " ";
+    // }
+    // std::cout << "\n"
+    //           << "+++++++++++++++++++++++++++++++++++++ " << std::endl;
 #endif
+#if 0
+    real r = 2.0 ;
+    real w;
+    std::vector<real> w_a(qs);
+    std::vector<real> x_a(qs);
+    computeDesignSensitivity<real, N>(r, w_a.data(), x_a.data());
+#endif
+
 #if 1
-    real rr = 2.0;
+    real rr = 2.00;
     real wp, wm;
-    real delta = 1e-05;
-    std::vector<real> w_ap(5);
-    std::vector<real> w_am(5);
-    std::vector<real> x_ap(5);
-    std::vector<real> x_am(5);
+    real delta = 1e-03;
+    std::vector<real> w_ap(qs);
+    std::vector<real> w_am(qs);
+    std::vector<real> x_ap(qs);
+    std::vector<real> x_am(qs);
     computeDesignSensitivity<real, N>(rr + delta, w_ap.data(), x_ap.data());
     computeDesignSensitivity<real, N>(rr - delta, w_am.data(), x_am.data());
-    // computeDesignSensitivity<real, N>(rr + delta, wp);
-    // computeDesignSensitivity<real, N>(rr - delta, wm);
-    // real dxdr = (wp - wm) / (2.0 * delta);
-    std::vector<real> dxdr(5);
-    std::vector<real> dwdr(5);
-    for (int k = 0; k < 5; ++k)
+    std::vector<real> dxdr(qs);
+    std::vector<real> dydr(qs);
+    std::vector<real> dwdr(qs);
+    for (int k = 0; k < qs; ++k)
     {
         dwdr.at(k) = (w_ap.at(k) - w_am.at(k)) / (2.0 * delta);
         dxdr.at(k) = (x_ap.at(k) - x_am.at(k)) / (2.0 * delta);
     }
-    std::cout << "+++++++++++++++++++++++++++++++++++++ " << std::endl;
-    // std::cout << "dxdr: " << w.dpart() << std::endl;
-    // std::cout << "dxdr-FD: " << dxdr << std::endl;
+    std::cout << "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ " << std::endl;
     std::cout << "dxdr: " << std::endl;
-    for (int k = 0; k < 5; ++k)
+    for (int k = 0; k < qs; ++k)
     {
         std::cout << x_a.at(k).dpart() << " ";
     }
-    std::cout << "\n" <<"dxdr-FD: " << std::endl;
-    for (int k = 0; k < 5; ++k)
+    std::cout << "\n"
+              << "dxdr-FD: " << std::endl;
+    for (int k = 0; k < qs; ++k)
     {
         std::cout << dxdr.at(k) << " ";
     }
-    std::cout << "\n" <<"dwdr: " << std::endl;
-    for (int k = 0; k < 5; ++k)
+    std::cout << "\n"
+              << "dwdr: " << std::endl;
+    for (int k = 0; k < qs; ++k)
     {
         std::cout << w_a.at(k).dpart() << " ";
     }
-    std::cout << "\n" << "dwdr-FD: " << std::endl;
-    for (int k = 0; k < 5; ++k)
+    std::cout << "\n"
+              << "dwdr-FD: " << std::endl;
+    for (int k = 0; k < qs; ++k)
     {
         std::cout << dwdr.at(k) << " ";
     }
-    // std::cout << "dxdr: " << w.dpart() << std::endl;
-    // std::cout << "dxdr-FD: " << dxdr << std::endl;
-    std::cout << "\n" << "+++++++++++++++++++++++++++++++++++++ " << std::endl;
-
+    std::cout << "\n"
+              << "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ " << std::endl;
+    std::cout << "abs(dxdr-duals - dxdr-FD) : " << std::endl;
+    for (int k = 0; k < qs; ++k)
+    {
+        std::cout << abs(dxdr.at(k) - x_a.at(k).dpart()) << " ";
+    }
+    std::cout << "\n";
+    std::cout << "abs(dwdr-duals - dwdr-FD) : " << std::endl;
+    for (int k = 0; k < qs; ++k)
+    {
+        std::cout << abs(dwdr.at(k) - w_a.at(k).dpart()) << " ";
+    }
+    std::cout << "\n";
+    std::cout << "************************************************************************************************************  " << std::endl;
 #endif
 
 #if 0
