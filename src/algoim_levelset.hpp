@@ -384,7 +384,7 @@ namespace Algoim
             xmin = xc - x(0).delta();
             const int nv = pow(2, N);
             /// get element vertices
-            TinyVector<TinyVector<double, N>, nv> vert;
+            TinyVector<TinyVector<double, N>, 4> vert;
             // \Note- need to modify this
             vert(0) = xmin;
             vert(1) = {xmax(0), xmin(1)};
@@ -641,7 +641,7 @@ namespace Algoim
             xmin = xc - x(0).delta();
             const int nv = pow(2, N);
 
-            TinyVector<TinyVector<double, N>, nv> vert;
+            TinyVector<TinyVector<double, N>, 4> vert;
             // \Note- need to modify this
             vert(0) = xmin;
             vert(1) = {xmax(0), xmin(1)};

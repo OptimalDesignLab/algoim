@@ -4,9 +4,9 @@
 #include "algoim_quad.hpp"
 using namespace ::blitz;
 using namespace ::Algoim;
-bool ellipse = false;
+bool ellipse = true;
 bool circle = false;
-bool airfoil = true;
+bool airfoil = false;
 #include <chrono>
 using namespace std::chrono;
 /// this function constructs the normal vectors for given boundary points of level-set geometry
@@ -91,7 +91,21 @@ std::vector<TinyVector<double, N - 1>> getCurvature(std::vector<TinyVector<doubl
     }
     return kappa;
 }
+template <int N>
+struct Ellipsoid
+{
+    template <typename T>
+    T operator()(const blitz::TinyVector<T, N> &x) const
+    {
+        return x(0) * x(0) + 16.0 * x(1) * x(1) - 16.0;
+    }
 
+    template <typename T>
+    blitz::TinyVector<T, N> grad(const blitz::TinyVector<T, N> &x) const
+    {
+        return blitz::TinyVector<T, N>(2.0 * x(0), 32.0 * x(1));
+    }
+};
 template <int N>
 struct LevelSet
 {
@@ -168,8 +182,8 @@ int main(int argc, char *argv[])
 
     if (ellipse)
     {
-        const char *area_err = "new_quad_convergence/ellipse_area_err_indicator_p_1_2_nbnd_4.dat";
-        const char *peri_err = "new_quad_convergence/ellipse_peri_err_indicator_p_1_2_nbnd_4.dat";
+        const char *area_err = "new_quad_convergence/ellipse_area_error_linear_q2_quad_nbnd_1.dat";
+        const char *peri_err = "new_quad_convergence/ellipse_peri_error_linear_q2_quad_nbnd_1.dat";
         ofstream file_area_err, file_peri_err;
         file_area_err.open(area_err, ios::app);
         file_peri_err.open(peri_err, ios::app);
@@ -181,15 +195,16 @@ int main(int argc, char *argv[])
         const int count = 4;
         const int N = 2;
         double delta = 1e-10;
+        int ratio = 10;
         for (int q0 = 0; q0 < count; ++q0)
         {
             /// grid size
-            int n = nel[q0 + 1];
+            int n = nel[q0];
             /// # boundary points
-            int nbnd = 4 * n;
+            int nbnd = n; //pow(n, qo1);
             cout << "nbnd " << nbnd << endl;
             /// parameters
-            double rho = 10 * nbnd;
+            double rho = ratio * nbnd;
             cout << "rho " << rho << endl;
             /// major axis
             double a = 4.0;
@@ -224,10 +239,11 @@ int main(int argc, char *argv[])
                 TinyVector<double, N - 1> curv;
                 curv(0) = num / den;
                 kappa.push_back(curv);
-                // kappa.push_back(0.0);
+               // kappa.push_back(0.0);
             }
             cout << "qo " << qo1 << endl;
             QuadratureRule<N> qarea, qperi;
+            QuadratureRule<N> qarea_exact, qperi_exact;
             /// Area of a 2D ellipse, computed via the cells of a Cartesian grid
             {
                 auto area_start = high_resolution_clock::now();
@@ -298,10 +314,10 @@ int main(int argc, char *argv[])
                                     double delk_x = sqrt(magsqr(x_diff) + delta);
                                     double psi_scale = exp(-rho * (delk_x - min_dist1)) / denom2;
                                     double weight = psi_scale * pt.w;
-                                    if (weight < tol)
-                                    {
-                                        weight = tol;
-                                    }
+                                    // if (weight < tol)
+                                    // {
+                                    //     weight = tol;
+                                    // }
                                     if (weight > tol)
                                     {
                                         qarea.evalIntegrand(xp, weight);
@@ -328,10 +344,10 @@ int main(int argc, char *argv[])
                                     double delk_x = sqrt(magsqr(x_diff) + delta);
                                     double psi_scale = exp(-rho * (delk_x - min_dist1)) / denom2;
                                     double weight = psi_scale * pt.w;
-                                    if (weight < tol)
-                                    {
-                                        weight = tol;
-                                    }
+                                    // if (weight < tol)
+                                    // {
+                                    //     weight = tol;
+                                    // }
                                     if (weight > tol)
                                     {
                                         qperi.evalIntegrand(xp, weight);
@@ -339,18 +355,42 @@ int main(int argc, char *argv[])
                                 }
                             }
                         }
-                        // cout << "#local dist functions used: " << itr << endl;
+                        /// using exact lsf
+                        Ellipsoid<2> phi_exact;
+                        auto q_exact = Algoim::quadGen<2>(phi_exact, Algoim::BoundingBox<double, 2>(xmin, xmax), -1, -1, qo1);
+                        for (const auto &pt : q_exact.nodes)
+                        {
+                            TinyVector<double, N> xp;
+                            xp[0] = pt.x[0];
+                            xp[1] = pt.x[1];
+                            double weight = pt.w;
+                            qarea_exact.evalIntegrand(xp, weight);
+                        }
+                        auto qp_exact = Algoim::quadGen<2>(phi_exact, Algoim::BoundingBox<double, 2>(xmin, xmax), 2, -1, qo1);
+                        for (const auto &pt : qp_exact.nodes)
+                        {
+                            TinyVector<double, N> xp;
+                            xp[0] = pt.x[0];
+                            xp[1] = pt.x[1];
+                            double weight = pt.w;
+                            qperi_exact.evalIntegrand(xp, weight);
+                        }
                     }
                 cout << "exact_area " << exact_area << endl;
                 double area = qarea.sumWeights();
                 double peri = qperi.sumWeights();
+                double area_exact = qarea_exact.sumWeights();
+                double peri_exact = qperi_exact.sumWeights();
                 auto area_stop = high_resolution_clock::now();
                 auto area_duration = duration_cast<seconds>(area_stop - area_start);
+                std::cout << "  exact lsf area = " << area_exact << "\n";
                 std::cout << "  computed area = " << area << "\n";
-                double area_err = abs(area - exact_area);
+                double area_err = abs(area - area_exact);
+                double exact_peri = 17.156843550313663;
                 std::cout << "  area error = " << area_err << "\n";
+                std::cout << "  exact lsf perimeter = " << peri_exact << "\n";
                 std::cout << "  computed perimeter = " << peri << "\n";
-                double peri_err = abs(peri - 17.156843550313663);
+                double peri_err = abs(peri - peri_exact);
                 std::cout << "  perimeter error = " << peri_err << "\n";
                 // member function on the duration object
                 cout << " ---- Time taken  ---- " << endl;
@@ -359,7 +399,15 @@ int main(int argc, char *argv[])
                 file_area_err << area_err << " ";
                 file_peri_err << peri_err << " ";
             }
-            std::ofstream farea("ellipse_area_indicator.vtp");
+            std::ofstream farea_exact("ellipse_area_indicator_exact.vtp");
+            Algoim::outputQuadratureRuleAsVtpXML(qarea_exact, farea_exact);
+            std::cout << "  scheme.vtp file written, containing " << qarea_exact.nodes.size()
+                      << " quadrature points\n";
+            std::ofstream fperi_exact("ellipse_peri_indicator_exact.vtp");
+            Algoim::outputQuadratureRuleAsVtpXML(qperi_exact, fperi_exact);
+            std::cout << "  scheme.vtp file written, containing " << qperi_exact.nodes.size()
+                      << " quadrature points\n";
+           std::ofstream farea("ellipse_area_indicator.vtp");
             Algoim::outputQuadratureRuleAsVtpXML(qarea, farea);
             std::cout << "  scheme.vtp file written, containing " << qarea.nodes.size()
                       << " quadrature points\n";
