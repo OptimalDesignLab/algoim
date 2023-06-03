@@ -50,7 +50,7 @@ std::vector<TinyVector<double, N>> constructNormal(std::vector<TinyVector<double
 /// \param[in] rho - penalty parameter
 /// \param[in] delta- parameter that smooths distance near zero
 template <int N>
-void testLevelSetBounds(vector<TinyVector<double, N>> Xc, vector<TinyVector<double, N>> nor, vector<TinyVector<double, N-1>> kappa,
+void testLevelSetBounds(vector<TinyVector<double, N>> Xc, vector<TinyVector<double, N>> nor, vector<TinyVector<double, N - 1>> kappa,
                         double xslice, double ymax, double ymin, const int nel, int rho, double delta)
 {
     /// create level-set object
@@ -61,6 +61,7 @@ void testLevelSetBounds(vector<TinyVector<double, N>> Xc, vector<TinyVector<doub
     double ds = (ymax - ymin) / nel;
     del = {0.5 * ds, 0.5 * ds};
     double L = mag(del);
+    cout << setprecision(15) << endl;
     cout << " ------------------------------------------- " << endl;
     cout << "                       phi_bnd       " << endl;
     cout << " ------------------------------------------- " << endl;
@@ -93,7 +94,7 @@ void testLevelSetBounds(vector<TinyVector<double, N>> Xc, vector<TinyVector<doub
 /// \param[in] rho - penalty parameter
 /// \param[in] delta- parameter that smooths distance near zero
 template <int N>
-void testLevelSetGradBounds(vector<TinyVector<double, N>> Xc, vector<TinyVector<double, N>> nor, vector<TinyVector<double, N-1>> kappa,
+void testLevelSetGradBounds(vector<TinyVector<double, N>> Xc, vector<TinyVector<double, N>> nor, vector<TinyVector<double, N - 1>> kappa,
                             double xslice, double ymax, double ymin, const int nel, int rho, double delta)
 {
     /// create level-set object
@@ -104,6 +105,7 @@ void testLevelSetGradBounds(vector<TinyVector<double, N>> Xc, vector<TinyVector<
     double ds = (ymax - ymin) / nel;
     del = {0.5 * ds, 0.5 * ds};
     double L = mag(del);
+    cout << setprecision(15) << endl;
     cout << " ------------------------------------------- " << endl;
     cout << "           phi_derivative bnds      " << endl;
     cout << " ------------------------------------------- " << endl;
@@ -153,7 +155,7 @@ int main(int argc, char *argv[])
     }
     file.close();
 #endif
-
+    cout << setprecision(15) << endl;
     /// # boundary poiints
     int nbnd = 32;
     cout << "nbnd " << nbnd << endl;
@@ -162,14 +164,16 @@ int main(int argc, char *argv[])
     /// boundary normal vector coords
     std::vector<TinyVector<double, N>> nor;
     /// boundary curvature
-    std::vector<TinyVector<double, N-1>> kappa;
+    std::vector<TinyVector<double, N - 1>> kappa;
     /// parameters
-    double rho = 2.0;
+    double ratio = 10;
+    double rho = ratio * nbnd;
     double delta = 1e-10;
     /// major axis
     double a = 4.0;
     /// minor axis
     double b = 1.0;
+    // cout << "nor " << endl;
     for (int k = 0; k < nbnd; ++k)
     {
         double theta = k * 2.0 * M_PI / nbnd;
@@ -191,9 +195,10 @@ int main(int argc, char *argv[])
         double mag_dx = mag(dx);
         double den = mag_dx * mag_dx * mag_dx;
         TinyVector<double, N - 1> curv;
-        //curv(0) = num / den;
+        // curv(0) = num / den;
         curv(0) = 0.0;
         kappa.push_back(curv);
+        // cout <<nor.at(k) << endl;
     }
     /// evaluate levelset and it's gradient
     Algoim::LevelSet<N> phi;
@@ -211,8 +216,8 @@ int main(int argc, char *argv[])
     double ymin = -2.0;
     double ymax = 2.0;
     double xslice = 3.0;
-    cout << setprecision(12) << endl;
-    testLevelSetBounds<N>(Xc, nor, kappa, xslice, ymax, ymin, nel, rho, delta);
-    //testLevelSetGradBounds<N>(Xc, nor, kappa, xslice, ymax, ymin, nel, rho, delta);
+
+    // testLevelSetBounds<N>(Xc, nor, kappa, xslice, ymax, ymin, nel, rho, delta);
+    testLevelSetGradBounds<N>(Xc, nor, kappa, xslice, ymax, ymin, nel, rho, delta);
     return 0;
 } // main ends
