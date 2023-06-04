@@ -549,7 +549,7 @@ namespace Algoim
                 phi_bnd_2 += term3 * bar_psi;
                 ///  ************************************ bound 2 ends !!!
             }
-            cout << phi_bnd_2 << endl;
+            //cout << phi_bnd_2 << endl;
             double phi_bnd = min(phi_bnd_1, phi_bnd_2);
             LevelSet<N> ls;
             ls.initializeLevelSet(xbnd, norm, kappa, rho, lsign, delta);
@@ -758,7 +758,7 @@ namespace Algoim
                 phiy_bnd_2 += (Py + Qy) * bar_psi + R;
                 ///  ************************************ bound 2 ends !!!
             }
-            cout << phix_bnd_2 << " , " << phiy_bnd_2 << endl;
+            //cout << phix_bnd_2 << " , " << phiy_bnd_2 << endl;
 
             double phix_bnd = min(phix_bnd_1, phix_bnd_2);
             double phiy_bnd = min(phiy_bnd_1, phiy_bnd_2);

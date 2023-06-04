@@ -2,9 +2,9 @@
 #include "algoim_levelset.hpp"
 #include <iostream>
 #include <iomanip> // std::setprecision()
-bool ellipse = true;
+bool ellipse = false;
 bool circle = false;
-bool circ = false;
+bool circ = true;
 bool airfoil = false;
 #include <chrono>
 using namespace std::chrono;
@@ -562,8 +562,8 @@ int main(int argc, char *argv[])
         // file_peri_err << std::fixed << setprecision(20) << endl;
         std::cout << setprecision(20) << endl;
         int nel[9] = {8, 16, 32, 64, 128, 256, 512, 1024, 2048};
-        int qo1 = 2;
-        const int count = 5;
+        int qo1 = 1;
+        const int count = 4;
         TinyVector<double, count> Avec;
         TinyVector<double, count> Pvec;
 
@@ -726,8 +726,8 @@ int main(int argc, char *argv[])
 
     if (circ)
     {
-        const char *area_err = "circle_area_error_thesis.dat";
-        const char *perimeter_err = "circle_peri_error_thesis.dat";
+        const char *area_err = "circle_area_error_thesis_lin.dat";
+        const char *perimeter_err = "circle_peri_error_thesis_lin.dat";
         ofstream file_area, file_area_err, file_peri, file_peri_err;
         file_area_err.open(area_err, ios::app);
         file_peri_err.open(perimeter_err, ios::app);
@@ -738,7 +738,7 @@ int main(int argc, char *argv[])
         std::cout << setprecision(20) << endl;
         int nel[9] = {8, 16, 32, 64, 128, 256, 512, 1024, 2048};
         int qo1 = 2;
-        const int count = 5;
+        const int count = 4;
         TinyVector<double, count> Avec;
         TinyVector<double, count> Pvec;
 
@@ -747,7 +747,7 @@ int main(int argc, char *argv[])
             /// grid size
             int n = nel[q0];
             /// # boundary points
-            int nbnd = 4*n;
+            int nbnd = pow(n, qo1);
             cout << "nbnd " << nbnd << endl;
             /// parameters
             double rho = 10*nbnd;
@@ -784,8 +784,8 @@ int main(int argc, char *argv[])
                 double den = mag_dx * mag_dx * mag_dx;
                 TinyVector<double, N - 1> curv;
                 curv(0) = num / den;
-                kappa.push_back(curv);
-                //kappa.push_back(0.0);
+                //kappa.push_back(curv);
+                kappa.push_back(0.0);
             }
             /// evaluate levelset and it's gradient
             Algoim::LevelSet<N> phi;
@@ -800,16 +800,16 @@ int main(int argc, char *argv[])
             cout << "qo " << qo1 << endl;
             QuadratureRule<N> qarea, qperi;
             QuadratureRule<N> qarea_exact, qperi_exact;
-            /// Area of a 2D ellipse, computed via the cells of a Cartesian grid
+            /// Area of a 2D circle, computed via the cells of a Cartesian grid
             {
                 auto area_start = high_resolution_clock::now();
-                std::cout << "Area and Perimeter of a 2D ellipse, computed via the cells of a " << n << " by " << n << " Cartesian grid:\n";
+                std::cout << "Area and Perimeter of a 2D circle , computed via the cells of a " << n << " by " << n << " Cartesian grid:\n";
                 double dx = 1.2 / n;
                 double dy = 1.2 / n;
                 double min_x = -0.6;
                 double min_y = -0.6;
-                // double area = 0.0;
-                // double peri = 0.0;
+                double area = 0.0;
+                double peri = 0.0;
                 for (int i = 0; i < n; ++i)
                     for (int j = 0; j < n; ++j)
                     {
@@ -817,11 +817,11 @@ int main(int argc, char *argv[])
                         blitz::TinyVector<double, 2> xmax = {min_x + i * dx + dx, min_y + j * dy + dy};
                         // cout << "xmin: " << xmin << " xmax: " << xmax << endl;
                         auto q = Algoim::quadGen<2>(phi, Algoim::BoundingBox<double, 2>(xmin, xmax), -1, -1, qo1);
-                        // area += q([](TinyVector<double, 2> x)
-                        //           { return 1.0; });
+                        area += q([](TinyVector<double, 2> x)
+                                  { return 1.0; });
                         auto qp = Algoim::quadGen<2>(phi, Algoim::BoundingBox<double, 2>(xmin, xmax), 2, -1, qo1);
-                        // peri += qp([](TinyVector<double, 2> x)
-                        //            { return 1.0; });
+                        peri += qp([](TinyVector<double, 2> x)
+                                   { return 1.0; });
                         for (const auto &pt : q.nodes)
                         {
                             TinyVector<double, N> xp;
@@ -863,17 +863,19 @@ int main(int argc, char *argv[])
                 cout << "      " << area_duration.count() << "s " << endl;
                 cout << " ----------------------- " << endl;
                 cout << "exact_area " << exact_area << endl;
-                double area = qarea.sumWeights();
-                double peri = qperi.sumWeights();
+                // double area = qarea.sumWeights();
+                // double peri = qperi.sumWeights();
                 double area_exact = qarea_exact.sumWeights();
                 double peri_exact = qperi_exact.sumWeights();
                 double exact_area =  M_PI * a * a;
                 std::cout << "  exact  area = " << exact_area << "\n";
+                std::cout << "  exact  LSF area = " << area_exact << "\n";
                 std::cout << "  computed area = " << area << "\n";
                 double area_err = abs(area - exact_area);
                 double exact_peri = 2.0 * M_PI * a;
                 std::cout << "  area error = " << area_err << "\n";
                 std::cout << "  exact  perimeter = " << exact_peri << "\n";
+                std::cout << "  exact  LSF perimeter = " << peri_exact << "\n";
                 std::cout << "  computed perimeter = " << peri << "\n";
                 double peri_err = abs(peri - exact_peri);
                 std::cout << "  perimeter error = " << peri_err << "\n";
