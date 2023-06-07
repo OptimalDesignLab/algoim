@@ -863,12 +863,14 @@ int main(int argc, char *argv[])
         outputQuadratureRuleAsVtpXML<N>(surf_all, "ellipse-surf.vtp");
     }
 #endif
-#if 0
+#if 1
      // q-convergence study for a 2D circle
     {
-        auto circle = [](const uvector<real, 2> &x)
+        real delta = 1e-06;
+        real r = 2.0 + delta;
+        auto circle = [&](const uvector<real, 2> &x)
         {
-            return x(0) * x(0) + x(1) * x(1) - 4.0;
+            return x(0) * x(0) + x(1) * x(1) - r * r;
         };
         auto integrand  = [](const uvector<real, 2> &x)
         {
@@ -879,7 +881,7 @@ int main(int argc, char *argv[])
         std::cout << "\n\nCircle q-convergence test\n";
         std::cout << "q      area(q)         perim(q)        area error       perim error\n";
         //
-        int nel = 4;
+        int nel = 2;
         std::cout << "Area of a 2D circle, computed via the cells of a " << nel << " by " << nel << " Cartesian grid:\n";
         real dx = 4.2 / nel;
         const int N = 2;
@@ -898,13 +900,12 @@ int main(int argc, char *argv[])
                 xmin(1) = -2.1 + j * dx;
                 xmax(0) = -2.1 + i * dx + dx;
                 xmax(1) = -2.1 + j * dx + dx;
-                GetQuadScheme<2>(circle, xmin, xmax, 3, 10, surf, phase0, phase1);
+                GetQuadScheme<2>(circle, xmin, xmax, 4, 3, surf, phase0, phase1);
                 qAreaPeri<2>(circle, xmin, xmax, 3, integrand, 10, volume_exact, surf_exact, area_c, peri_c);
                 // std::cout << "area: " << area_c << std::endl;
                 // std::cout << "perimeter : " << peri_c << std::endl;
                 area += area_c;
                 peri += peri_c;
-                // std::cout << "surf.size()  " << surf.size() << std::endl;
                 for (int nq = 0; nq < surf.size(); ++nq)
                 {
                     real xq = surf.at(nq)(0);
@@ -926,6 +927,7 @@ int main(int argc, char *argv[])
                     phase1_all.push_back(phase1.at(nq));
                 }
             }
+        std::cout << "surf.size()  " << surf_all.size() << std::endl;
         std::cout << "circle area: " << area << std::endl;
         std::cout << "circle perimeter: " << peri << std::endl;
         outputQuadratureRuleAsVtpXML<N>(phase0_all, "circle-phase0.vtp");
@@ -1005,6 +1007,7 @@ int main(int argc, char *argv[])
         outputQuadratureRuleAsVtpXML<N + 1>(phaseY_all, "circle-phaseY.vtp");
     }
 #endif
+#if 0
     // q-convergence study for an airfoil
     {
         auto airfoil_phi = [](const uvector<real, 2> &xs)
@@ -1206,6 +1209,7 @@ int main(int argc, char *argv[])
         outputQuadratureRuleAsVtpXML<N + 1>(phaseY_all, "airfoil-phaseY.vtp");
         outputQuadratureRuleAsVtpXML<N + 1>(surf_all, "airfoil-surf.vtp");
     }
+#endif
 #if 0
     std::cout << "Algoim Examples - High-order quadrature algorithms for multi-component domains implicitly-defined\n";
     std::cout << "by (one or more) multivariate Bernstein polynomials\n\n";
